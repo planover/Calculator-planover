@@ -86,23 +86,19 @@ class _ExpressionFieldState extends State<ExpressionField> {
           vertical: Tokens.padSm,
         ),
         alignment: Alignment.centerRight,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          reverse: true,
-          child: TextField(
-            controller: _tec,
-            onChanged: _onChanged,
-            // 自定义键盘为主输入，避免软键盘与按键区重叠（P1-12 仍支持点击定位光标）。
-            keyboardType: TextInputType.none,
-            textAlign: TextAlign.right,
-            autofocus: false,
-            cursorColor: Theme.of(context).colorScheme.primary,
-            style: TextStyle(
-              fontSize: Tokens.fontSizeExpr,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-            decoration: const InputDecoration.collapsed(hintText: ''),
+        child: TextField(
+          controller: _tec,
+          onChanged: _onChanged,
+          // 自定义键盘为主输入，避免软键盘与按键区重叠（P1-12 仍支持点击定位光标）。
+          keyboardType: TextInputType.none,
+          textAlign: TextAlign.right,
+          autofocus: false,
+          cursorColor: Theme.of(context).colorScheme.primary,
+          style: TextStyle(
+            fontSize: Tokens.fontSizeExpr,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
+          decoration: const InputDecoration.collapsed(hintText: ''),
         ),
       ),
     );
