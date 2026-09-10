@@ -13,6 +13,13 @@ dependencies:
   cupertino_icons: ^1.0.6
   # FFI 直连 Rust core（不使用 flutter_rust_bridge，见 engine/ffi）
   ffi: ^2.1.0
+  # 历史记录落地（SQLite）；不引 intl —— 日期格式自建，见 lib/src/utils/date_format.dart
+  sqflite: ^2.3.0
+  path: ^1.9.0
+  # 设置持久化
+  shared_preferences: ^2.2.0
+  # 状态广播（T05 的 MultiProvider 注入三个控制器）
+  provider: ^6.1.1
 
 dev_dependencies:
   flutter_test:

@@ -31,14 +31,23 @@ jobs:
         run: cargo test -p calculator_core
 
   flutter-shell:
-    name: Flutter pub get (skeleton only)
+    name: Flutter analyze + test (Dart side)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
-      - name: Validate pubspec + resolve deps
-        # 仅解析依赖校验骨架；Dart lib/ 资源在后续轮次落地，此处不执行 build
-        working-directory: app
+          # 架构 §依赖清单锁定 Flutter 3.24.5（Dart 3.5.4），杜绝版本漂移
+          flutter-version: '3.24.5'
+          cache: true
+      - name: Resolve deps
         run: flutter pub get
+      - name: Analyze
+        # --no-fatal-infos：风格类提示不算失败，只拦 error/warning
+        run: flutter analyze --no-fatal-infos
+      - name: Test
+        # 用例一律注入 FakeEngine / MemoryHistoryRepository，不加载 .so（架构风险 R3）
+        run: flutter test
