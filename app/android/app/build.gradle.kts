@@ -7,7 +7,6 @@ plugins {
 android {
     namespace = "org.solovyev.android.calculator"
     compileSdk = 34
-    ndkVersion = "26.1.10909125"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -20,7 +19,7 @@ android {
 
     defaultConfig {
         applicationId = "org.solovyev.android.calculator"
-        minSdk = 21
+        minSdk = 26
         targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"

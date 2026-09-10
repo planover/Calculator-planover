@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -18,7 +19,6 @@ jobs:
           - aarch64-linux-android
           - armv7-linux-androideabi
           - x86_64-linux-android
-          - i686-linux-android
     defaults:
       run:
         working-directory: engine
@@ -48,12 +48,20 @@ jobs:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          # 架构 §依赖清单锁定 Flutter 3.24.5（Dart 3.5.4），与 ci.yml 一致；
+          # generate_android_shell.py 生成的 gradle 壳必须与构建版本一致
+          flutter-version: '3.24.5'
+          cache: true
       - name: Download native libs
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+      - name: Generate Android shell (gradle wrapper)
+        # gradle-wrapper.jar 是二进制、不入库：用与锁定 Flutter 版本匹配的
+        # `flutter create` 现场生成 gradlew / gradle-wrapper.jar 并拷回 app/android/
+        run: python3 tools/generate_android_shell.py
       - name: Assemble jniLibs
+        # 打入 .so + 落包信息（applicationId/minSdk/targetSdk/label）+ grep 断言
         run: python3 tools/patch_android.py --artifacts artifacts
       - name: Build APK
         working-directory: app
@@ -63,3 +71,47 @@ jobs:
         with:
           name: app-release.apk
           path: app/build/app/outputs/flutter-apk/app-release.apk
+
+  verify-package:
+    name: Verify APK package info + ABIs
+    needs: build-apk
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: app-release.apk
+          path: apk
+      - name: Assert three ABIs present (unzip fallback)
+        run: |
+          set -e
+          APK=apk/app-release.apk
+          unzip -l "$APK"
+          for so in \
+            lib/arm64-v8a/libcalculator_ffi.so \
+            lib/armeabi-v7a/libcalculator_ffi.so \
+            lib/x86_64/libcalculator_ffi.so; do
+            if unzip -l "$APK" | grep -q "$so"; then
+              echo "OK  $so"
+            else
+              echo "缺少原生库：$so" >&2
+              exit 1
+            fi
+          done
+      - name: Assert package info via aapt
+        run: |
+          set -e
+          export PATH="$PATH:${ANDROID_SDK_ROOT}/build-tools/34.0.0"
+          yes | sdkmanager "build-tools;34.0.0" > /dev/null || true
+          APK=apk/app-release.apk
+          BADGING="$(aapt dump badging "$APK")"
+          echo "$BADGING"
+          echo "$BADGING" | grep -q "package: name='org.solovyev.android.calculator'" \
+            || { echo "applicationId 不符" >&2; exit 1; }
+          echo "$BADGING" | grep -q "sdkVersion:'26'" \
+            || { echo "minSdk 不符" >&2; exit 1; }
+          echo "$BADGING" | grep -q "targetSdkVersion:'34'" \
+            || { echo "targetSdk 不符" >&2; exit 1; }
+          echo "$BADGING" | grep -q "application-label:'Calculator-planover'" \
+            || { echo "label 不符" >&2; exit 1; }
+          echo "包信息断言全部通过"
