@@ -28,21 +28,59 @@
       "grouping": "数字分组",
       "history": "历史记录",
       "clearHistory": "清除历史",
-      "about": "关于"
+      "about": "关于",
+      "appearance": "外观",
+      "calculation": "计算",
+      "displayFormat": "显示格式",
+      "engine": "计算引擎",
+      "fractionImproper": "假分数",
+      "fractionMixed": "带分数",
+      "fractionOff": "关",
+      "negPowNote": "-3^2 = -9（一元负号优先级低于幂运算）",
+      "notationAuto": "自动",
+      "notationFixed": "定点",
+      "notationScientific": "科学计数",
+      "precisionDecimalPlaces": "小数位数",
+      "precisionMode": "精度模式",
+      "precisionSignificant": "有效数字",
+      "version": "版本",
+      "wordSize": "位宽"
     },
     "keypad": {
       "equal": "=",
-      "clear": "C"
+      "clear": "C",
+      "ans": "ans",
+      "backspace": "⌫",
+      "closeParen": ")",
+      "decimal": ".",
+      "divide": "÷",
+      "minus": "−",
+      "multiply": "×",
+      "negate": "±",
+      "openParen": "(",
+      "plus": "+",
+      "power": "^",
+      "sqrt": "√"
     },
     "history": {
       "empty": "暂无历史记录",
-      "clearConfirm": "确定要清除全部历史吗？"
+      "clearConfirm": "确定要清除全部历史吗？",
+      "title": "历史记录"
     },
     "error": {
       "title": "错误"
     },
     "unitConverter": {
-      "title": "单位换算"
+      "title": "单位换算",
+      "open": "打开单位换算",
+      "placeholder": "输入数值",
+      "swap": "交换"
+    },
+    "tabs": {
+      "constants": "常量",
+      "functions": "函数",
+      "units": "单位",
+      "variables": "变量"
     }
   },
   "errors": {},

@@ -28,21 +28,59 @@
       "grouping": "Digit grouping",
       "history": "History",
       "clearHistory": "Clear history",
-      "about": "About"
+      "about": "About",
+      "appearance": "Appearance",
+      "calculation": "Calculation",
+      "displayFormat": "Display format",
+      "engine": "Engine",
+      "fractionImproper": "Improper",
+      "fractionMixed": "Mixed",
+      "fractionOff": "Off",
+      "negPowNote": "-3^2 = -9 (unary minus binds looser than exponentiation)",
+      "notationAuto": "Auto",
+      "notationFixed": "Fixed",
+      "notationScientific": "Scientific",
+      "precisionDecimalPlaces": "Decimal places",
+      "precisionMode": "Precision mode",
+      "precisionSignificant": "Significant",
+      "version": "Version",
+      "wordSize": "Word size"
     },
     "keypad": {
       "equal": "=",
-      "clear": "C"
+      "clear": "C",
+      "ans": "ans",
+      "backspace": "⌫",
+      "closeParen": ")",
+      "decimal": ".",
+      "divide": "÷",
+      "minus": "−",
+      "multiply": "×",
+      "negate": "±",
+      "openParen": "(",
+      "plus": "+",
+      "power": "^",
+      "sqrt": "√"
     },
     "history": {
       "empty": "No history yet",
-      "clearConfirm": "Clear all history?"
+      "clearConfirm": "Clear all history?",
+      "title": "History"
     },
     "error": {
       "title": "Error"
     },
     "unitConverter": {
-      "title": "Unit converter"
+      "title": "Unit converter",
+      "open": "Open converter",
+      "placeholder": "Enter a value",
+      "swap": "Swap"
+    },
+    "tabs": {
+      "constants": "Constants",
+      "functions": "Functions",
+      "units": "Units",
+      "variables": "Variables"
     }
   },
   "errors": {},
