@@ -11,7 +11,6 @@ library;
 
 import '../models/constant_info.dart';
 import '../models/convert_result.dart';
-import '../models/engine_error.dart';
 import '../models/eval_result.dart';
 import '../models/eval_settings.dart';
 import '../models/unit_info.dart';

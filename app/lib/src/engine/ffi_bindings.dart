@@ -14,6 +14,9 @@
 library;
 
 import 'dart:ffi';
+// Utf8 / toNativeUtf8 / malloc 都在 package:ffi 里，**不在 dart:ffi 里**。
+// 少了这一行会得到几十条 "The name 'Utf8' isn't a type" —— CI 首次分析即暴露此问题。
+import 'package:ffi/ffi.dart';
 
 // ── 1. calc_version()：注意它**没有入参** ──────────────────────
 /// C 侧：`calc_version() -> *mut c_char`。

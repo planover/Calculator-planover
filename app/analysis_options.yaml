@@ -1,4 +1,6 @@
-include: package:flutter_lints/analysis_options.yaml
+# 路径必须是 flutter.yaml（官方模板），不是 analysis_options.yaml ——
+# 后者不存在，会让 `flutter analyze` 报 include_file_not_found 并判定失败。
+include: package:flutter_lints/flutter.yaml
 
 linter:
   rules:
