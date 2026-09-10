@@ -1,0 +1,51 @@
+{
+  "ui": {
+    "common": {
+      "ok": "确定",
+      "cancel": "取消",
+      "clear": "清除",
+      "delete": "删除",
+      "copy": "复制",
+      "close": "关闭",
+      "done": "完成",
+      "back": "返回"
+    },
+    "app": {
+      "title": "计算器"
+    },
+    "settings": {
+      "title": "设置",
+      "language": "语言",
+      "languageAuto": "跟随系统",
+      "theme": "主题",
+      "themeSystem": "跟随系统",
+      "themeLight": "浅色",
+      "themeDark": "深色",
+      "angleMode": "角度",
+      "notation": "记数法",
+      "precision": "精度",
+      "fraction": "分数",
+      "grouping": "数字分组",
+      "history": "历史记录",
+      "clearHistory": "清除历史",
+      "about": "关于"
+    },
+    "keypad": {
+      "equal": "=",
+      "clear": "C"
+    },
+    "history": {
+      "empty": "暂无历史记录",
+      "clearConfirm": "确定要清除全部历史吗？"
+    },
+    "error": {
+      "title": "错误"
+    },
+    "unitConverter": {
+      "title": "单位换算"
+    }
+  },
+  "errors": {},
+  "units": {},
+  "constants": {}
+}

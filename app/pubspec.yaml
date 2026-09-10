@@ -10,10 +10,19 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # 多语言：Material 组件自带的本地化文案（日期选择器等的本地化标签）
+  flutter_localizations:
+    sdk: flutter
   cupertino_icons: ^1.0.6
+  # 区域习惯：取各 locale 的小数点 / 千分位符号（CLDR 数据）
+  # 注意：intl 只用于**数字与日期的区域格式**，消息翻译走自研 JSON 语言包，
+  # 目的是避免 gen-l10n 代码生成（本机无 SDK，生成产物无法验证）。
+  intl: ^0.19.0
   # FFI 直连 Rust core（不使用 flutter_rust_bridge，见 engine/ffi）
   ffi: ^2.1.0
-  # 历史记录落地（SQLite）；不引 intl —— 日期格式自建，见 lib/src/utils/date_format.dart
+  # 历史记录落地（SQLite）
+  # 注：日期的"今天/昨天"相对文案走自研语言包（见 lib/src/utils/date_format.dart），
+  # 只有数字分隔符用 intl 的 CLDR 数据，避免为日期再拉一份 ICU 数据。
   sqflite: ^2.3.0
   path: ^1.9.0
   # 设置持久化
@@ -28,3 +37,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    # 运行时语言包：<locale>.json，见 lib/src/l10n/
+    - assets/i18n/

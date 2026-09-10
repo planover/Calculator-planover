@@ -31,6 +31,12 @@ abstract class SettingsStore {
 
   /// 写入主题模式。
   Future<void> saveThemeMode(AppThemeMode mode);
+
+  /// 读取用户手动指定的语言标签；`null` 表示**跟随系统**。
+  Future<String?> loadLocaleTag();
+
+  /// 写入语言标签；传 `null` 表示恢复"跟随系统"。
+  Future<void> saveLocaleTag(String? tag);
 }
 
 /// 基于 SharedPreferences 的实现。
@@ -50,6 +56,7 @@ class SharedPreferencesSettingsStore implements SettingsStore {
   static const String _kFractionMode = 'settings.fraction_mode';
   static const String _kGrouping = 'settings.grouping';
   static const String _kThemeMode = 'settings.theme_mode';
+  static const String _kLocaleTag = 'settings.locale_tag';
 
   @override
   Future<EvalSettings> loadSettings() async {
@@ -137,6 +144,22 @@ class SharedPreferencesSettingsStore implements SettingsStore {
     await prefs.setString(_kThemeMode, mode.name);
   }
 
+  @override
+  Future<String?> loadLocaleTag() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_kLocaleTag);
+  }
+
+  @override
+  Future<void> saveLocaleTag(String? tag) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    if (tag == null) {
+      await prefs.remove(_kLocaleTag);
+      return;
+    }
+    await prefs.setString(_kLocaleTag, tag);
+  }
+
   static int _clamp(int v, int lo, int hi) => v < lo ? lo : (v > hi ? hi : v);
 
   static T _enumFrom<T>(
@@ -162,6 +185,9 @@ class MemorySettingsStore implements SettingsStore {
   /// 当前主题（内存版直接暴露字段，便于测试断言）。
   AppThemeMode themeMode;
 
+  /// 手动指定的语言标签；`null` 表示"跟随系统"（与 [SettingsStore] 语义一致）。
+  String? _localeTag;
+
   @override
   Future<EvalSettings> loadSettings() async => _settings ?? EvalSettings.defaults;
 
@@ -176,5 +202,13 @@ class MemorySettingsStore implements SettingsStore {
   @override
   Future<void> saveThemeMode(AppThemeMode mode) async {
     themeMode = mode;
+  }
+
+  @override
+  Future<String?> loadLocaleTag() async => _localeTag;
+
+  @override
+  Future<void> saveLocaleTag(String? tag) async {
+    _localeTag = tag;
   }
 }

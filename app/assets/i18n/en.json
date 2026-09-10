@@ -1,0 +1,51 @@
+{
+  "ui": {
+    "common": {
+      "ok": "OK",
+      "cancel": "Cancel",
+      "clear": "Clear",
+      "delete": "Delete",
+      "copy": "Copy",
+      "close": "Close",
+      "done": "Done",
+      "back": "Back"
+    },
+    "app": {
+      "title": "Calculator"
+    },
+    "settings": {
+      "title": "Settings",
+      "language": "Language",
+      "languageAuto": "Follow system",
+      "theme": "Theme",
+      "themeSystem": "System",
+      "themeLight": "Light",
+      "themeDark": "Dark",
+      "angleMode": "Angle",
+      "notation": "Notation",
+      "precision": "Precision",
+      "fraction": "Fractions",
+      "grouping": "Digit grouping",
+      "history": "History",
+      "clearHistory": "Clear history",
+      "about": "About"
+    },
+    "keypad": {
+      "equal": "=",
+      "clear": "C"
+    },
+    "history": {
+      "empty": "No history yet",
+      "clearConfirm": "Clear all history?"
+    },
+    "error": {
+      "title": "Error"
+    },
+    "unitConverter": {
+      "title": "Unit converter"
+    }
+  },
+  "errors": {},
+  "units": {},
+  "constants": {}
+}
