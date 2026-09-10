@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-rust-android:
+    name: Build Rust cdylib for Android
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - aarch64-linux-android
+          - armv7-linux-androideabi
+          - x86_64-linux-android
+          - i686-linux-android
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --version 3.1.2
+      - name: Build cdylib
+        run: |
+          cargo ndk -t ${{ matrix.target }} \
+            -o ../app/android/app/src/main/jniLibs \
+            build -p calculator_ffi --release
+      - name: Upload so
+        uses: actions/upload-artifact@v4
+        with:
+          name: jniLibs-${{ matrix.target }}
+          path: app/android/app/src/main/jniLibs
+
+  build-apk:
+    name: Build Flutter APK
+    needs: build-rust-android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Download native libs
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Assemble jniLibs
+        run: python3 tools/patch_android.py --artifacts artifacts
+      - name: Build APK
+        working-directory: app
+        run: flutter pub get && flutter build apk --release
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release.apk
+          path: app/build/app/outputs/flutter-apk/app-release.apk

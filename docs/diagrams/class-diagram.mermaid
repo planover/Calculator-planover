@@ -1,0 +1,291 @@
+%% Calculator-planover 关键数据结构类图（Rust 侧 + Dart 侧映射）
+classDiagram
+    direction LR
+
+    class Num {
+        <<enum>>
+        Rational~i64 num, i64 den~
+        Float~f64~
+        Special~Special~
+        +rational(num, den) Result~Num~
+        +int(v) Num
+        +float(v) Num
+        +to_f64() f64
+        +try_as_i64() Result~i64~
+        +add/sub/mul/rem() Num
+        +div(r) Result~Num~
+        +pow(r) Result~Num~
+        +sqrt() Result~Num~
+        +factorial() Result~Num~
+        +to_rational_approx(max_den) Option~Num~
+    }
+    class Special {
+        <<enum>>
+        Nan
+        Infinity
+        NegInfinity
+    }
+    Num --> Special
+
+    class Span {
+        +usize start
+        +usize end
+        +merge(other) Span
+    }
+
+    class ErrorKind {
+        <<enum>>
+        UnexpectedCharacter 1000
+        UnexpectedToken 1001
+        IncompleteExpression 1002
+        MismatchedParen 1003
+        DivisionByZero 2000
+        DomainError 2001
+        Overflow 2002
+        NotAnInteger 2003
+        UnknownUnit 3000
+        IncompatibleUnits 3001
+        BelowAbsoluteZero 3002
+        UndefinedVariable 4000
+        ReservedName 4001
+        InvalidRequest 5000
+        InternalError 5002
+        +code() u16
+        +stable_name() str
+    }
+    class EngineError {
+        +ErrorKind kind
+        +Option~Span~ span
+        +String message
+        +new(kind) EngineError
+        +with_span(kind, span) EngineError
+    }
+    EngineError --> ErrorKind
+    EngineError --> Span
+
+    class AngleMode {
+        <<enum>>
+        Deg
+        Rad
+        Grad
+        +to_radians(f64) f64
+        +from_radians(f64) f64
+    }
+    class NumberFormatSettings {
+        +Notation notation
+        +PrecisionMode precision_mode
+        +u8 precision
+        +FractionMode fraction_mode
+        +bool grouping
+    }
+    class EngineSettings {
+        +AngleMode angle_mode
+        +u8 word_size
+        +NumberFormatSettings format
+    }
+    EngineSettings --> AngleMode
+    EngineSettings --> NumberFormatSettings
+
+    class Session {
+        +HashMap~String,Num~ variables
+        +Option~Num~ ans
+        +EngineSettings settings
+        +get_var(name) Result~Num~
+        +set_var(name, Num) Result
+        +delete_var(name) Result
+        +reset()
+    }
+    Session --> EngineSettings
+
+    class Expr {
+        <<enum>>
+        Number~Num,Span~
+        Const~String,Span~
+        Var~String,Span~
+        Unary
+        Binary
+        Call
+        Factorial
+        Assign
+    }
+    class Token {
+        +TokenKind kind
+        +String text
+        +Span span
+    }
+    class Lexer {
+        +new(src) Lexer
+        +tokenize() Result~Vec~Token~~
+    }
+    class Parser {
+        +new(tokens, src) Parser
+        +parse() Result~Expr~
+        +parse_lenient() Result~Expr~
+    }
+    class EvalContext {
+        +Session session
+        +u32 depth
+    }
+    Lexer --> Token
+    Token --> Span
+    Parser --> Expr
+    Expr --> Span
+
+    class FunctionDef {
+        +str name
+        +Arity arity
+        +FuncCategory category
+        +str insert_template
+        +eval(args, ctx) Result~Num~
+    }
+    class ConstantDef {
+        +str symbol
+        +str name
+        +str unit
+        +f64 value
+        +str category
+    }
+    class UnitDef {
+        +str id
+        +str symbol
+        +str name
+        +UnitCategory category
+        +UnitKind kind
+    }
+    class UnitKind {
+        <<enum>>
+        Proportional~f64 factor~
+        Affine~f64 scale, f64 offset~
+    }
+    class UnitCategory {
+        <<enum>>
+        Length Mass Temperature Time
+        Area Volume DataStorage Speed
+        Pressure Energy
+        +units() Vec~UnitDef~
+    }
+    UnitDef --> UnitKind
+    UnitDef --> UnitCategory
+
+    class BaseRepr {
+        +String dec
+        +String hex
+        +String oct
+        +String bin
+        +u8 word_size
+        +bool is_integer
+    }
+    class EvalResult {
+        +Num value
+        +String display
+        +Option~String~ fraction
+        +BaseRepr base
+        +Vec~VariableInfo~ assignments
+    }
+    EvalResult --> Num
+    EvalResult --> BaseRepr
+
+    class ConvertResult {
+        +UnitInfo from
+        +UnitInfo to
+        +Num input_value
+        +Num output_value
+        +String output_display
+    }
+    ConvertResult --> Num
+
+    class Engine {
+        -Session session
+        +evaluate_preview(expr) Result~EvalResult~
+        +evaluate_commit(expr) Result~EvalResult~
+        +convert(value, from, to) Result~ConvertResult~
+        +list_constants() Vec~ConstantInfo~
+        +list_units(cat) Vec~CategoryInfo~
+        +set_variable(name, expr) Result~VariableInfo~
+        +set_angle_mode(m)
+        +set_word_size(w) Result
+        +reset_session()
+    }
+    Engine --> Session
+    Engine --> EvalResult
+    Engine --> ConvertResult
+
+    class Envelope~T~ {
+        +bool ok
+        +Option~T~ data
+        +Option~ErrorDto~ error
+    }
+    class ErrorDto {
+        +u16 code
+        +str kind
+        +String message
+        +Option~Span~ span
+    }
+    class Api {
+        <<module>>
+        +dispatch(method, json, engine) String
+    }
+    Api --> Envelope~T~
+    Envelope~T~ --> ErrorDto
+
+    %% ── Dart 侧 ──
+    class EngineGateway {
+        <<abstract Dart>>
+        +evaluatePreview(req) Future~EvalResult~
+        +evaluateCommit(req) Future~EvalResult~
+        +convert(req) Future~ConvertResult~
+        +listConstants() Future~List~ConstantInfo~~
+        +listUnits(cat) Future~List~CategoryInfo~~
+    }
+    class NativeEngine {
+        <<Dart>>
+        -DynamicLibrary lib
+        -invoke(method, json) Map
+    }
+    class FakeEngine {
+        <<Dart test double>>
+        +fixedResults Map
+    }
+    EngineGateway <|-- NativeEngine
+    EngineGateway <|-- FakeEngine
+
+    class CalculatorController {
+        <<Dart ChangeNotifier>>
+        -String text
+        -int cursor
+        -EvalResult preview
+        -EngineError error
+        -Debouncer debouncer
+        +onChanged(text, cursor)
+        +commit()
+        +insertKey(String)
+    }
+    class SettingsController {
+        <<Dart ChangeNotifier>>
+        +AngleMode angleMode
+        +NumberFormatSettings format
+        +ThemeMode theme
+    }
+    class HistoryController {
+        <<Dart ChangeNotifier>>
+        -HistoryRepository repo
+        +add(entry)
+        +remove(id)
+        +clear()
+        +search(kw)
+    }
+    class HistoryRepository {
+        <<abstract Dart>>
+        +insert(entry)
+        +all() Future~List~HistoryEntry~~
+        +delete(id)
+        +clear()
+    }
+    class SqfliteHistoryRepository
+    class MemoryHistoryRepository
+    HistoryRepository <|-- SqfliteHistoryRepository
+    HistoryRepository <|-- MemoryHistoryRepository
+
+    CalculatorController --> EngineGateway
+    HistoryController --> HistoryRepository
+    CalculatorController --> SettingsController

@@ -1,0 +1,15 @@
+[package]
+name = "calculator_core"
+description = "Calculator-planover 的计算内核：表达式求值、单位换算、进制转换、格式化"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "calculator_core"
+# 只产 rlib：本机没有 MSVC linker 时 `cargo test` 也能跑
+crate-type = ["rlib"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

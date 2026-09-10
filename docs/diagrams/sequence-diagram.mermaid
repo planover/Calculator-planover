@@ -1,0 +1,86 @@
+%% Calculator-planover 三条主链路时序图
+sequenceDiagram
+    autonumber
+    participant U as 用户
+    participant EF as ExpressionField
+    participant CC as CalculatorController
+    participant DB as Debouncer(120ms)
+    participant GW as EngineGateway
+    participant NE as NativeEngine
+    participant DLL as libcalculator_ffi.so
+    participant CORE as calculator_core::api
+    participant HC as HistoryController
+    participant HR as HistoryRepository(sqflite)
+    participant US as UnitConverterScreen
+    participant UN as units.rs
+
+    rect rgb(235, 244, 255)
+    Note over U,CORE: 链路 A：输入变化 → 防抖 → Rust 求值 → 预览渲染
+    U->>EF: 按键 / 移动光标 / 删除
+    EF->>CC: onChanged(text, cursor)
+    CC->>CC: 乐观更新 text/selection
+    CC->>DB: schedule(evaluate)
+    DB-->>CC: 120ms 后触发（新输入取消前次）
+    CC->>GW: evaluatePreview(expr, settings)
+    GW->>NE: evaluatePreview
+    NE->>NE: jsonEncode(EvaluateRequest)
+    NE->>DLL: calc_evaluate_preview(ptr)
+    DLL->>CORE: api::dispatch("evaluate_preview", json)
+    CORE->>CORE: lexer → parser(Pratt) → eval → format → base
+    CORE-->>DLL: Envelope<EvalResultDto> JSON
+    DLL-->>NE: *mut c_char
+    NE->>NE: toDartString → jsonDecode
+    NE->>DLL: calc_string_free(ptr)  %% finally
+    NE-->>GW: EvalResult / throw EngineException
+    GW-->>CC: EvalResult
+    alt ok
+        CC->>CC: preview=display; base; error=null
+    else 失败
+        CC->>CC: error=EngineError(code,kind,message,span)
+    end
+    CC-->>EF: notifyListeners → 预览行 / 错误高亮渲染
+    end
+
+    rect rgb(240, 255, 240)
+    Note over U,HR: 链路 B：按 = → commit → 写历史 + 更新 ans
+    U->>EF: 按下 "="
+    EF->>CC: commit()
+    CC->>CC: 取消 pending 防抖
+    CC->>GW: evaluateCommit(expr, settings)
+    GW->>DLL: calc_evaluate_commit(ptr)
+    DLL->>CORE: eval → session.ans = value（Q9 与历史解耦）
+    CORE-->>DLL: EvalResultDto
+    DLL-->>GW: JSON
+    GW-->>CC: EvalResult
+    alt 成功
+        CC->>HC: add(HistoryEntry(expr,result,ts,kind:calc))
+        HC->>HR: insert(entry)
+        HR->>HR: count>500 → 删除最旧（Q7）
+        CC->>CC: text=result.display; cursor=末尾; preview=null
+    else 失败
+        CC->>CC: 保留表达式，预览行显示错误 + span
+    end
+    CC-->>EF: notifyListeners
+    end
+
+    rect rgb(255, 250, 235)
+    Note over U,UN: 链路 C：单位换算
+    U->>US: 打开单位页
+    US->>GW: listUnits(null)
+    GW->>DLL: calc_list_units("{}")
+    DLL->>UN: UnitCategory::all() + units()
+    UN-->>US: 10 类 × ≥6 单位（SI + IEC 双套）
+    U->>US: 左输入 12.7，源 inch，目标 mm
+    US->>CC: debounce 120ms
+    CC->>GW: convert({value:"12.7", from:"inch", to:"mm"})
+    GW->>DLL: calc_convert(ptr)
+    DLL->>UN: 归一到 SI 基准 → 反算目标
+    alt 同类别
+        UN-->>US: output_display = "322.58 mm"
+        US->>US: 仅写右侧（_editingSide 防循环）
+    else 跨类别 / 低于绝对零度
+        UN-->>US: error 3001 / 3002
+    end
+    U->>US: 点 ⇅ 交换 → from/to 与数值互换后重算
+    U->>US: 记入历史 → kind:unit
+    end

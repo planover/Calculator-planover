@@ -1,0 +1,7 @@
+[toolchain]
+# 锁定工具链，避免 CI 与本地行为漂移（架构 §7.1）。
+# Android 三 ABI 的 target 由 CI 的 dtolnay/rust-toolchain@stable 的 `targets:` 输入安装，
+# 这里不写，否则本地每次都会额外下载三份 std，拖慢首次构建。
+channel = "1.83.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

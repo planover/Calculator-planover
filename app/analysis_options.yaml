@@ -1,0 +1,12 @@
+include: package:flutter_lints/analysis_options.yaml
+
+linter:
+  rules:
+    prefer_const_constructors: true
+    always_declare_return_types: true
+    avoid_print: false
+
+analyzer:
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"

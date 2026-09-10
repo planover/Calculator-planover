@@ -1,0 +1,16 @@
+[package]
+name = "calculator_ffi"
+description = "Calculator-planover 的 C ABI 胶水层：CString ↔ JSON，无任何业务逻辑"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "calculator_ffi"
+# 只产 cdylib：APK 里就是 libcalculator_ffi.so
+crate-type = ["cdylib"]
+
+[dependencies]
+calculator_core = { workspace = true }
+serde_json = { workspace = true }
+libc = { workspace = true }

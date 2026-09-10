@@ -1,0 +1,26 @@
+# 换行符策略：仓库内统一 LF 存储；Windows 检出时按需转换
+# 背景：CI 在 Linux 运行，shell 脚本若带 CRLF 会直接执行失败（历史教训：构建环境换行符敏感）
+* text=auto
+
+# 必须严格 LF 的文件（CI 直接执行 / 解析）
+*.sh   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.py   text eol=lf
+*.kts  text eol=lf
+*.gradle text eol=lf
+*.xml  text eol=lf
+*.kt   text eol=lf
+*.rs   text eol=lf
+*.toml text eol=lf
+*.lock text eol=lf
+*.md   text eol=lf
+*.mermaid text eol=lf
+*.properties text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# 二进制文件
+*.png binary
+*.jar binary
+*.webp binary

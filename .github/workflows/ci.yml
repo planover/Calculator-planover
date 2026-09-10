@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "master", "**"]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  rust-core:
+    name: Rust core tests (calculator_core)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain (pinned by engine/rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "engine -> target"
+      - name: Build core
+        run: cargo build -p calculator_core
+      - name: Test (core only — default-members=[core] 不链接 cdylib)
+        # 只测 rlib，保证无 Android / FFI 依赖也能 100% 跑绿
+        run: cargo test -p calculator_core
+
+  flutter-shell:
+    name: Flutter pub get (skeleton only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Validate pubspec + resolve deps
+        # 仅解析依赖校验骨架；Dart lib/ 资源在后续轮次落地，此处不执行 build
+        working-directory: app
+        run: flutter pub get
