@@ -24,8 +24,12 @@ jobs:
         working-directory: engine
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          # 与 engine/rust-toolchain.toml 锁定的 channel="1.83.0" 保持一致。
+          # 若只装 stable，实际编译会被 rust-toolchain.toml 切到 1.83.0，
+          # 而 Android target 只装到了 stable 上 → E0463 can't find crate for `core`。
+          toolchain: 1.83.0
           targets: ${{ matrix.target }}
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --version 3.1.2
