@@ -1,32 +1,61 @@
-/// 入口占位 —— **T05 会整体替换**本文件。
+/// 应用入口（架构 §T05 要点 1 / 2）。
 ///
-/// 为什么先放一个占位：架构 §T01 的验收条件要求 `flutter analyze` 有 `lib/` 可分析，
-/// 空目录会让 CI 直接红。这里只做最小可编译实现，不承载任何业务逻辑。
+/// 装配顺序：`ensureInitialized` → 构造 `NativeEngine`（失败也记录错误、不崩）
+/// → 构造各 Controller（store 注入）→ `runApp(MyApp)`。
 ///
-/// 真正的入口（T05）会：`ensureInitialized` → 构造 `NativeEngine` →
-/// `MultiProvider` 注入 Settings / History / Calculator 三个控制器 → 启动 App。
+/// 这是**全项目唯一允许 import `native_engine.dart` / `dart:ffi`** 的地方
+/// （架构风险 R3：测试进程加载不到 `.so` 会崩，故测试只注入 [FakeEngine]）。
 library;
 
 import 'package:flutter/material.dart';
 
+import 'src/engine/native_engine.dart';
+import 'src/engine/fake_engine.dart';
+import 'src/engine/engine_gateway.dart';
+import 'src/state/calculator_controller.dart';
+import 'src/state/history_controller.dart';
+import 'src/state/locale_controller.dart';
+import 'src/state/settings_controller.dart';
+import 'src/storage/history_repository.dart';
+import 'src/storage/settings_store.dart';
+import 'src/ui/app.dart';
+
 /// 应用入口。
-void main() {
-  runApp(const PlaceholderApp());
-}
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
-/// 占位应用。
-class PlaceholderApp extends StatelessWidget {
-  /// 构造占位应用。
-  const PlaceholderApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Calculator-planover',
-      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.indigo),
-      home: const Scaffold(
-        body: Center(child: Text('Calculator-planover — UI 层 T05 落地中')),
-      ),
-    );
+  // 构造引擎：失败也要能显示错误页，不要崩（架构 §T05 要点 1）。
+  EngineGateway? engine;
+  try {
+    engine = NativeEngine();
+  } catch (e, stack) {
+    // 记录错误，交给 MyApp 渲染错误页。
+    debugPrint('引擎初始化失败：$e');
+    debugPrint(stack.toString());
   }
+
+  final SettingsStore store = SharedPreferencesSettingsStore();
+  final SettingsController settings = SettingsController(store: store);
+  final LocaleController locale = LocaleController(store: store);
+  await settings.load();
+  await locale.load();
+
+  final HistoryController history = HistoryController(SqfliteHistoryRepository());
+  await history.load();
+
+  // 引擎初始化失败时退回 FakeEngine 占位，保证 UI 仍能装配（错误页叠加显示）。
+  final EngineGateway activeEngine = engine ?? FakeEngine();
+  final CalculatorController calc = CalculatorController(
+    engine: activeEngine,
+    settings: settings,
+    history: history,
+  );
+
+  runApp(MyApp(
+    settings: settings,
+    locale: locale,
+    history: history,
+    calculator: calc,
+    engineOk: engine != null,
+  ));
 }
