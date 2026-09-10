@@ -42,7 +42,7 @@ class _UnitConverterScreenState extends State<UnitConverterScreen> {
     final CalculatorController calc =
         Provider.of<CalculatorController>(context, listen: false);
     _categories = calc.engine.listUnits();
-    _category = _categories.isNotEmpty ? _categories.first : null;
+    _category = _categories.isNotEmpty ? _categories.first : const CategoryInfo();
     _fromFocus.addListener(() {
       if (_fromFocus.hasFocus) {
         _side = 0;

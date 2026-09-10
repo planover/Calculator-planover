@@ -77,8 +77,6 @@ class _ExpressionFieldState extends State<ExpressionField> {
 
   @override
   Widget build(BuildContext context) {
-    final CalculatorController calc =
-        Provider.of<CalculatorController>(context, listen: false);
     return Semantics(
       label: 'expression',
       textField: true,

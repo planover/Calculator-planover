@@ -16,9 +16,9 @@ import 'src/state/calculator_controller.dart';
 import 'src/state/history_controller.dart';
 import 'src/state/locale_controller.dart';
 import 'src/state/settings_controller.dart';
-import 'src/storage/history_repository.dart';
 import 'src/storage/settings_store.dart';
-import 'src/ui/app.dart';
+import 'src/storage/sqflite_history_repository.dart';
+import 'app.dart';
 
 /// 应用入口。
 void main() async {

@@ -7,16 +7,15 @@ library;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../l10n/app_localizations.dart';
-import '../../state/locale_controller.dart';
-import '../../theme/tokens.dart';
-import '../screens/settings_screen.dart';
-import '../screens/unit_converter_screen.dart';
-import '../widgets/display_panel.dart';
-import '../widgets/expression_field.dart';
-import '../widgets/function_tabs.dart';
-import '../widgets/history_sheet.dart';
-import '../widgets/keypad.dart';
+import '../l10n/app_localizations.dart';
+import '../state/locale_controller.dart';
+import 'screens/settings_screen.dart';
+import 'screens/unit_converter_screen.dart';
+import 'widgets/display_panel.dart';
+import 'widgets/expression_field.dart';
+import 'widgets/function_tabs.dart';
+import 'widgets/history_sheet.dart';
+import 'widgets/keypad.dart';
 
 /// 主界面。
 class HomeScreen extends StatelessWidget {

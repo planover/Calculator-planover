@@ -12,6 +12,7 @@
 library;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import '../engine/engine_exception.dart';
 import '../engine/engine_gateway.dart';
@@ -19,6 +20,7 @@ import '../models/base_repr.dart';
 import '../models/eval_result.dart';
 import '../models/eval_settings.dart';
 import '../models/engine_error.dart';
+import '../models/history_entry.dart';
 import '../state/debouncer.dart';
 import '../state/settings_controller.dart';
 import 'history_controller.dart';

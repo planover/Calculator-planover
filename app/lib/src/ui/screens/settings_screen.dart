@@ -179,17 +179,14 @@ class _AngleRow extends StatelessWidget {
           ButtonSegment<AngleMode>(
             value: AngleMode.deg,
             label: Text('DEG'),
-            semanticLabel: 'DEG',
           ),
           ButtonSegment<AngleMode>(
             value: AngleMode.rad,
             label: Text('RAD'),
-            semanticLabel: 'RAD',
           ),
           ButtonSegment<AngleMode>(
             value: AngleMode.grad,
             label: Text('GRAD'),
-            semanticLabel: 'GRAD',
           ),
         ],
         selected: <AngleMode>{calc.angleMode},

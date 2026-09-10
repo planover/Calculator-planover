@@ -17,6 +17,7 @@ import 'src/state/calculator_controller.dart';
 import 'src/state/history_controller.dart';
 import 'src/state/locale_controller.dart';
 import 'src/state/settings_controller.dart';
+import 'src/storage/settings_store.dart';
 import 'src/theme/app_theme.dart';
 import 'src/ui/home_screen.dart';
 

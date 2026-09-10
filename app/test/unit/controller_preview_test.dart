@@ -3,16 +3,15 @@
 /// 铁律：**只注入 [FakeEngine]，绝不 import `native_engine.dart` / `dart:ffi`**（R3）。
 library;
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:calculator_planover/src/engine/engine_exception.dart';
-import 'package:calculator_planover/src/engine/engine_gateway.dart';
 import 'package:calculator_planover/src/engine/fake_engine.dart';
 import 'package:calculator_planover/src/models/eval_result.dart';
 import 'package:calculator_planover/src/models/eval_settings.dart';
 import 'package:calculator_planover/src/state/calculator_controller.dart';
 import 'package:calculator_planover/src/state/history_controller.dart';
-import 'package:calculator_planover/src/state/locale_controller.dart';
 import 'package:calculator_planover/src/state/settings_controller.dart';
 import 'package:calculator_planover/src/storage/memory_history_repository.dart';
 import 'package:calculator_planover/src/storage/settings_store.dart';

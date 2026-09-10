@@ -10,8 +10,7 @@ import 'package:provider/provider.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../state/calculator_controller.dart';
-import '../../state/settings_controller.dart';
-import '../../theme/tokens.dart';
+import '../../state/locale_controller.dart';
 import '../widgets/key_button.dart';
 
 /// 科学键盘。
