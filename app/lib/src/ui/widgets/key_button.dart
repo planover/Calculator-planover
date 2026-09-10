@@ -123,12 +123,15 @@ class _KeyButtonState extends State<KeyButton> {
       ),
     );
 
-    return Semantics(
-      label: widget.semanticLabel,
-      button: true,
-      excludeSemantics: widget.semanticLabel != null,
-      child: Expanded(
-        flex: widget.span,
+    // Expanded 必须是 Row/Column 的**直接**子节点；若被 Semantics 包住会抛
+    // ParentDataWidget 断言（CI test 暴露）。故把 Expanded 提到最外层，
+    // Semantics 置于其内部——语义与行为完全不变。
+    return Expanded(
+      flex: widget.span,
+      child: Semantics(
+        label: widget.semanticLabel,
+        button: true,
+        excludeSemantics: widget.semanticLabel != null,
         child: Padding(
           padding: const EdgeInsets.all(Tokens.padXs),
           child: GestureDetector(
