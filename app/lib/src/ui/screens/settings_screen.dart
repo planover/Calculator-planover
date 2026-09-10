@@ -212,7 +212,6 @@ class _WordSizeRow extends StatelessWidget {
               (int w) => ButtonSegment<int>(
                 value: w,
                 label: Text('$w'),
-                semanticLabel: '$w',
               ),
             )
             .toList(growable: false),

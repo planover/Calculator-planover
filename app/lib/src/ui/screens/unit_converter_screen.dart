@@ -135,7 +135,7 @@ class _UnitConverterScreenState extends State<UnitConverterScreen> {
     final AppLocalizations l10n =
         Provider.of<LocaleController>(context, listen: true).l10n;
 
-    if (_category == null) {
+    if (_categories.isEmpty) {
       return Scaffold(
         appBar: AppBar(title: Text(l10n.tr('ui.unitConverter.title'))),
         body: Center(child: Text(l10n.tr('ui.unitConverter.placeholder'))),
