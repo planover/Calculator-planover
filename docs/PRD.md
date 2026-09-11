@@ -1,6 +1,6 @@
 # Calculator-planover 产品需求文档（PRD）
 
-> 原型参照：Calculator++（包名 `org.solovyev.android.calculator`）
+> 原型参照：Calculator++；本产品包名 `com.planover.calculatorplanover`
 > 文档版本：**v1.2**
 > 撰写人：许清楚（产品经理）
 > 语言：简体中文
@@ -37,7 +37,7 @@
 | Language | 简体中文 |
 | Project Name | `calculator_planover` |
 | 应用显示名 | Calculator-planover |
-| applicationId | `org.solovyev.android.calculator`（固定，不可更改） |
+| applicationId | `com.planover.calculatorplanover`（固定，不可更改） |
 | 平台 | Android（minSdk 26 / targetSdk 34） |
 | 计算引擎 | **Rust**（双 crate：`calculator_core` rlib + `calculator_ffi` cdylib；通过 `#[no_mangle] extern "C"` C ABI + C 字符串 JSON 暴露，**Dart 侧原生 `dart:ffi` 直接绑定，零代码生成**） |
 | UI 工具链 | **Flutter**（Material 3，Dart 3） |
@@ -48,6 +48,7 @@
 ### 1.1 原始需求复述（用户原话）
 
 > "帮我开发一个计算器 app，用于安卓系统使用，功能齐全，操作便捷，可以按照 org.solovyev.android.calculator 这个包名原型 Calculator++ 进行仿照开发。计算器的应用名字叫 Calculator-planover。"
+> 注：该选型已于 2026-09-11 由用户变更——applicationId 改为 com.planover.calculatorplanover，以避免与侧载的原版 Calculator++ 同包名冲突。
 
 ### 1.2 已拍板选型（不可推翻）
 
@@ -150,7 +151,7 @@
 | ID | 需求 | 验收标准 | 验证 |
 |---|---|---|---|
 | P0-25 | **工程骨架**：Flutter 应用 + Rust 双 crate（`engine/core` + `engine/ffi`），**零代码生成**，目录结构清晰、README 含构建步骤 | 1) 仓库根含 `app/`(Flutter) 与 `engine/`(Rust)；2) `engine/core` 为 rlib（含全部逻辑与全部测试），`engine/ffi` 为 cdylib（仅 CString/serde 胶水）；3) **不存在任何 codegen 步骤**（无 `flutter_rust_bridge_codegen`、无 `build_runner`），Dart 侧 `dart:ffi` 手写绑定即可编译；4) 仓库不含需提交/再生的绑定产物 | `[C]` |
-| P0-26 | **applicationId = `org.solovyev.android.calculator`，应用名 = `Calculator-planover`** | 构建出的 APK 内 `AndroidManifest` package 为上述 id；安装后桌面图标名为 `Calculator-planover` | `[C]` 构建后 `aapt dump badging` 校验；`[M]` |
+| P0-26 | **applicationId = `com.planover.calculatorplanover`，应用名 = `Calculator-planover`** | 构建出的 APK 内 `AndroidManifest` package 为上述 id；安装后桌面图标名为 `Calculator-planover` | `[C]` 构建后 `aapt dump badging` 校验；`[M]` |
 | P0-27 | **Rust 引擎通过 C ABI 暴露给 Flutter（零 codegen）**：Rust 侧导出 `#[no_mangle] extern "C"` 函数，参数与返回值均为 C 字符串 JSON（`serde_json` 序列化 `Envelope{ok,data,error}`）；Dart 侧用原生 `dart:ffi` 直接 `DynamicLibrary.open('libcalculator_ffi.so')` 绑定。全部 API 语义收进纯字符串函数 `dispatch(method, json, &mut Engine) -> String`，FFI 层只做转发 | 1) 接口清单固定并写入 `engine/core/src/api.rs`；2) **`dispatch` 的 JSON 契约有 `cargo test` 覆盖**：直接喂 JSON 串断言输出 JSON（含成功与 `error.code` 两类）；3) 每个 `extern "C"` 函数只做 CStr→String→dispatch→CString，无业务逻辑；4) 提供 `calc_string_free` 释放本库分配的字符串，且 panic 不得 unwind 跨 FFI（统一兜为 JSON 错误码）；5) `calc_version()` 返回版本号与 abi 号供 Dart 启动自检 | `[R]`（JSON 契约单测，**本机可验证**）+ `[C]` |
 | P0-28 | **本地分层验证策略落地**：Rust 侧 `cargo test` 全绿（本机无 Java/Android/Flutter SDK，只跑 Rust）；Flutter 侧由 CI 跑 `flutter analyze` + `flutter test` | 1) `cargo test` 在本机零外部依赖下通过（因双 crate 拆分，workspace 默认只构建 rlib，不链接 cdylib，故本机无需 linker）；2) CI workflow 中 Flutter job 与 Rust job 分离，Rust job 失败即阻断 | `[R]` 本地实跑；`[C]` |
 | P0-29 | **GitHub Actions 自动构建 APK**：push/PR/tag 触发，产出 arm64-v8a / armeabi-v7a / x86_64 三个 ABI 的 APK 并上传为 artifact | 1) workflow 一次运行产出 ≥ 3 个 APK（或 1 个 universal + 3 个 split），且每个包内 `unzip -l` 可见对应 ABI 的 `libcalculator_ffi.so`；2) 打 tag 时额外创建 Release；3) 已裁决（Q11）：**Flutter SDK 锁定当前稳定版、Rust 通过仓库内 `rust-toolchain.toml` 锁定**，避免上游漂移；4) 已裁决（Q12）：**默认产出 debug/未签名 APK**，release 签名密钥经 GitHub Secrets 注入为可选路径 | `[C]` |
@@ -411,7 +412,7 @@
 
 | # | 约束 | 说明 |
 |---|---|---|
-| C1 | **applicationId 固定为 `org.solovyev.android.calculator`** | 用户指定，与原型 Calculator++ 对齐。注意：该 ID 在 Google Play 已存在，本产品仅作本地/侧载使用，不得尝试上架 Play 商店。 |
+| C1 | **applicationId 固定为 `com.planover.calculatorplanover`** | 用户于 2026-09-11 变更为本产品专有 id，与原版 Calculator++ 解耦、可共存。新 id 唯一，可正常侧载/发布。 |
 | C2 | **应用显示名 `Calculator-planover`** | `android:label` 固定为此值 |
 | C3 | **计算核心必须用 Rust 实现，且 FFI 采用 C ABI + C 字符串 JSON，零代码生成** | 出于精度与可移植性考虑。**Rust 侧导出 `#[no_mangle] extern "C"` 函数，载荷为 `serde_json` 序列化的 JSON 字符串；Dart 侧用原生 `dart:ffi` 直接绑定。不使用 `flutter_rust_bridge` 等任何 codegen 方案**——理由：本机无 Dart/Flutter SDK，代码生成类方案一旦出问题无法在本地复现修复，故选择无 codegen 的确定性方案。 |
 | C4 | **本地环境无 Java / Android SDK / Flutter SDK / Dart SDK** | 本机只能对 Rust crate 执行 `cargo test` 做真实验证。Flutter 侧源码的可编译性、静态分析、构建**全部由 GitHub Actions 保障**。验收标准必须体现此分层策略。**因 C3 采用零 codegen + 双 crate 拆分，本机连 FFI 的 JSON 契约也能一并验证**（见 §6.2）。 |

@@ -32,7 +32,7 @@ MANIFEST_FILE = os.path.join(ANDROID_APP_DIR, "src", "main", "AndroidManifest.xm
 JNILIBS = os.path.join(ANDROID_APP_DIR, "src", "main", "jniLibs")
 
 # 期望的包信息（架构 §8.3 基准）
-EXPECTED_APPLICATION_ID = "org.solovyev.android.calculator"
+EXPECTED_APPLICATION_ID = "com.planover.calculatorplanover"
 EXPECTED_MIN_SDK = 26
 EXPECTED_TARGET_SDK = 34
 EXPECTED_LABEL = "Calculator-planover"

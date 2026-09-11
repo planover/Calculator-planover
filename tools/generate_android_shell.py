@@ -9,8 +9,8 @@
 
 步骤：
 1. ``tempfile.mkdtemp()`` 建临时目录，在其中执行
-   ``flutter create --platforms=android --org org.solovyev.android
-   --project-name calculator <tmpdir>``，拿到匹配当前 Flutter 版本的 android 壳；
+   ``flutter create --platforms=android --org com.planover
+   --project-name calculatorplanover <tmpdir>``，拿到匹配当前 Flutter 版本的 android 壳；
 2. 把 ``<tmpdir>/android/gradle`` 目录、``gradlew``、``gradlew.bat`` 拷回
    ``app/android/``（覆盖同名），并 ``chmod +x app/android/gradlew``；
 3. 若 ``app/android/settings.gradle.kts`` 不存在，则整目录拷贝
@@ -49,9 +49,9 @@ def generate_shell(tmpdir: str) -> bool:
         "create",
         "--platforms=android",
         "--org",
-        "org.solovyev.android",
+        "com.planover",
         "--project-name",
-        "calculator",
+        "calculatorplanover",
         tmpdir,
     ]
     print("运行：" + " ".join(cmd))

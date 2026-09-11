@@ -1,4 +1,4 @@
-package org.solovyev.android.calculator
+package com.planover.calculatorplanover
 
 import io.flutter.embedding.android.FlutterActivity
 

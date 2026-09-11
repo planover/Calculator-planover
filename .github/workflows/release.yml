@@ -110,7 +110,7 @@ jobs:
           APK=apk/app-release.apk
           BADGING="$(aapt dump badging "$APK")"
           echo "$BADGING"
-          echo "$BADGING" | grep -q "package: name='org.solovyev.android.calculator'" \
+          echo "$BADGING" | grep -q "package: name='com.planover.calculatorplanover'" \
             || { echo "applicationId 不符" >&2; exit 1; }
           echo "$BADGING" | grep -q "sdkVersion:'26'" \
             || { echo "minSdk 不符" >&2; exit 1; }

@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "org.solovyev.android.calculator"
+    namespace = "com.planover.calculatorplanover"
     compileSdk = 34
 
     compileOptions {
@@ -18,7 +18,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "org.solovyev.android.calculator"
+        applicationId = "com.planover.calculatorplanover"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

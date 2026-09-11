@@ -18,7 +18,7 @@
 | D5 | Q1~Q12 全部 | 按主理人裁决执行，本文 §3/§4/§5 固化 | — |
 
 **不可推翻的外部约束**（来自用户拍板）：
-`applicationId = org.solovyev.android.calculator`｜显示名 `Calculator-planover`｜Rust 引擎 + Flutter UI｜三 ABI APK｜minSdk 26 / targetSdk 34。
+`applicationId = com.planover.calculatorplanover`｜显示名 `Calculator-planover`｜Rust 引擎 + Flutter UI｜三 ABI APK｜minSdk 26 / targetSdk 34。
 
 ---
 
@@ -249,7 +249,7 @@ Calculator-planover/
 该文件是**二进制**，无法以文本形式撰写；且 Flutter 模板随版本演进，手写 `settings.gradle.kts` 极易与所锁定的 Flutter 版本不一致 → CI 直接红。
 
 **采用方案（CI 生成 + 补丁覆盖，见 §8.3）**：
-1. CI 在临时目录执行 `flutter create --platforms=android --org org.solovyev.android --project-name calculator`，得到与当前 Flutter 版本 100% 匹配的 android 壳；
+1. CI 在临时目录执行 `flutter create --platforms=android --org com.planover --project-name calculatorplanover`，得到与当前 Flutter 版本 100% 匹配的 android 壳；
 2. 把 `gradle/`、`gradlew`、`gradlew.bat` 拷回仓库 `app/android/`；
 3. 用仓库自带的 `app/android/**` 文本配置**覆盖**生成物中的同名文件；
 4. 执行 `tools/patch_android.py` 强制写入并校验 `applicationId` / `minSdk` / `targetSdk` / `android:label`。
@@ -1213,7 +1213,7 @@ needs: [rust-test, flutter-analyze-test]
 - run: |
     AAPT=$ANDROID_HOME/build-tools/34.0.0/aapt
     for f in app/build/outputs/apk/debug/*.apk; do
-      "$AAPT" dump badging "$f" | grep -q "package: name='org.solovyev.android.calculator'" || exit 1
+      "$AAPT" dump badging "$f" | grep -q "package: name='com.planover.calculatorplanover'" || exit 1
       "$AAPT" dump badging "$f" | grep -q "sdkVersion:'26'" || exit 1
       "$AAPT" dump badging "$f" | grep -q "targetSdkVersion:'34'" || exit 1
       "$AAPT" dump badging "$f" | grep -q "application-label:'Calculator-planover'" || exit 1
@@ -1236,17 +1236,17 @@ needs: [rust-test, flutter-analyze-test]
 | 脚本 | 职责 | 关键实现要点 |
 |---|---|---|
 | `build_android_libs.sh` | 三 ABI 交叉编译 | `cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 -o <jniLibs> build --release`；产出后 `ls -R` 断言三个目录各有一个 `.so` |
-| `gen_android_shell.py` | 生成 gradle wrapper | 在 `tmp/` 跑 `flutter create --platforms=android --org org.solovyev.android --project-name calculator tmpapp`；把 `tmpapp/android/gradle`、`gradlew`、`gradlew.bat` 拷到 `app/android/`；若 `app/android/settings.gradle.kts` 不存在则整目录拷贝 |
-| `patch_android.py` | 落包信息与 SDK 版本 | 用正则改写 `app/android/app/build.gradle.kts`：`applicationId = "org.solovyev.android.calculator"`、`minSdk = 26`、`targetSdk = 34`；改写 `AndroidManifest.xml` 的 `android:label="Calculator-planover"`；**最后 grep 断言三项，失败 exit 1** |
+| `gen_android_shell.py` | 生成 gradle wrapper | 在 `tmp/` 跑 `flutter create --platforms=android --org com.planover --project-name calculatorplanover tmpapp`；把 `tmpapp/android/gradle`、`gradlew`、`gradlew.bat` 拷到 `app/android/`；若 `app/android/settings.gradle.kts` 不存在则整目录拷贝 |
+| `patch_android.py` | 落包信息与 SDK 版本 | 用正则改写 `app/android/app/build.gradle.kts`：`applicationId = "com.planover.calculatorplanover"`、`minSdk = 26`、`targetSdk = 34`；改写 `AndroidManifest.xml` 的 `android:label="Calculator-planover"`；**最后 grep 断言三项，失败 exit 1** |
 
 `app/android/app/build.gradle.kts` 关键片段（作为基准）：
 ```kotlin
 android {
-    namespace = "org.solovyev.android.calculator"
+    namespace = "com.planover.calculatorplanover"
     compileSdk = 34
     ndkVersion = ""            // 不使用 externalNativeBuild，留空/不写
     defaultConfig {
-        applicationId = "org.solovyev.android.calculator"
+        applicationId = "com.planover.calculatorplanover"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
@@ -1425,7 +1425,7 @@ app/android/**（配合 CI 校准：label / applicationId / minSdk / targetSdk�
 
 **验收方式**
 - `[F]` CI：`flutter analyze --no-fatal-infos` 无 error；`flutter test` 全绿（含 `expression_field_test` / `keypad_test` / `controller_preview_test`，均注入 `FakeEngine`）
-- `[C]` `build-apk` 三 ABI 成功；`verify-package`：applicationId = `org.solovyev.android.calculator`、minSdk 26、targetSdk 34、label = `Calculator-planover`
+- `[C]` `build-apk` 三 ABI 成功；`verify-package`：applicationId = `com.planover.calculatorplanover`、minSdk 26、targetSdk 34、label = `Calculator-planover`
 - `[M]` 真机：P0-01/03/20/23/24
 
 ---

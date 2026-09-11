@@ -1,6 +1,6 @@
 # Calculator-planover
 
-Android 科学计算器：**Rust 计算内核 + Flutter UI**，applicationId `org.solovyev.android.calculator`，应用名 `Calculator-planover`。
+Android 科学计算器：**Rust 计算内核 + Flutter UI**，applicationId `com.planover.calculatorplanover`，应用名 `Calculator-planover`。
 
 ## 架构总览
 
