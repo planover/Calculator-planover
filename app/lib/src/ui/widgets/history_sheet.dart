@@ -122,7 +122,29 @@ class _HistoryTile extends StatelessWidget {
         Provider.of<HistoryController>(context, listen: false);
 
     return ListTile(
-      title: Text(entry.expr),
+      title: Row(
+        children: <Widget>[
+          if (entry.usedMemory)
+            Padding(
+              padding: const EdgeInsets.only(right: Tokens.padSm),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'M',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  ),
+                ),
+              ),
+            ),
+          Expanded(child: Text(entry.expr)),
+        ],
+      ),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[

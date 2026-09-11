@@ -3,9 +3,11 @@
 /// 职责：
 /// - 持有表达式文本 / 光标、预览显示串、错误与进制表示；
 /// - 表达式变化经 120ms 防抖后调引擎预览求值（架构 §10：防抖统一用 [Debouncer]）；
-/// - `=` 提交求值并写入历史、清空输入；
+/// - `=` / Enter / 结果长按 提交求值并写入历史、清空输入；
 /// - 编辑走引擎 `applyEdit`（括号配对等），Dart 侧不实现任何插入/删除逻辑（R1）；
-/// - 设置（角度/位宽）变化经 [SettingsController] 持久化后**同步下发引擎**并立即重算预览。
+/// - 设置（角度/位宽）变化经 [SettingsController] 持久化后**同步下发引擎**并立即重算预览；
+/// - 记忆寄存器（PRD §13.1）：M+/M-/MC/MR 经引擎 `memory_*` 方法，UI 据此显示 `M` 指示器；
+/// - 提交方式（PRD §3.2 UI-11~13）：默认 calculate-on-fly（实时预览），手动模式需显式提交。
 ///
 /// 铁律：本文件**不 import `dart:ffi` / `native_engine.dart`**，只依赖
 /// [EngineGateway] 抽象（架构风险 R3）。
@@ -21,6 +23,8 @@ import '../models/eval_result.dart';
 import '../models/eval_settings.dart';
 import '../models/engine_error.dart';
 import '../models/history_entry.dart';
+import '../models/memory_state.dart';
+import '../models/submit_mode.dart';
 import '../state/debouncer.dart';
 import '../state/settings_controller.dart';
 import 'history_controller.dart';
@@ -38,6 +42,7 @@ class CalculatorController extends ChangeNotifier {
     _settings.addListener(_onSettingsChanged);
     // 把已载入的设置下发引擎（角度/位宽），并做首次预览。
     _pushSettingsToEngine();
+    _refreshMemory();
     _recomputePreview();
   }
 
@@ -53,6 +58,15 @@ class CalculatorController extends ChangeNotifier {
   BaseRepr? _base;
   EngineException? _error;
   ErrorSpan? _errorSpan;
+
+  /// 记忆寄存器当前状态（初值 0）。
+  MemoryState _memory = const MemoryState();
+
+  /// 当前表达式是否用过 `MR` 插回记忆值（用于历史条目标记，CP-16）。
+  bool _usedMemory = false;
+
+  /// 手动模式下，是否已有一次显式提交结果可供展示。
+  bool _resultExplicit = true;
 
   /// 当前表达式文本。
   String get text => _text;
@@ -82,12 +96,28 @@ class CalculatorController extends ChangeNotifier {
   /// 当前位宽（供设置页读取）。
   int get settingsWordSize => _settings.settings.wordSize;
 
-  /// 表达式变化（来自软键盘 / 粘贴 / IME）。
+  /// 记忆寄存器状态（UI 据此显示 `M` 指示器与记忆面板）。
+  MemoryState get memory => _memory;
+
+  /// 记忆寄存器是否非零（非零时显示 `M` 指示器，CP-07）。
+  bool get hasMemory => !_memory.isZero;
+
+  /// 提交方式：是否开启 calculate-on-fly（边输入边出结果，UI-11）。
+  bool get livePreview => _settings.submitMode == SubmitMode.auto;
+
+  /// 结果区是否应当展示结果（手动模式下仅显式提交后展示，UI-12）。
+  bool get resultVisible => livePreview || _resultExplicit;
+
+  /// 结果区应当展示的文本（手动模式下未提交时为空，UI-12）。
+  String get resultText => resultVisible ? _preview : '';
+
+  /// 当前表达式变化（来自软键盘 / 粘贴 / IME）。
   ///
   /// 立即更新文本让输入跟手，再经防抖触发预览求值。
   void onExpressionChanged(String text, TextSelection selection) {
     _text = text;
     _selection = selection;
+    _markEdited();
     notifyListeners();
     _debouncer.call(_recomputePreview);
   }
@@ -96,6 +126,7 @@ class CalculatorController extends ChangeNotifier {
   void setText(String text) {
     _text = text;
     _selection = TextSelection.collapsed(offset: text.length);
+    _markEdited();
     notifyListeners();
     _debouncer.call(_recomputePreview);
   }
@@ -115,14 +146,40 @@ class CalculatorController extends ChangeNotifier {
     }
     _text = outcome.text;
     _selection = TextSelection.collapsed(offset: outcome.cursor);
+    _markEdited();
     notifyListeners();
     _debouncer.call(_recomputePreview);
+  }
+
+  /// 智能括号键 `( )`（键盘第 5 行第 1 位，UI-09）：依据当前表达式未配对的
+  /// 左括号数，自动决定插入 `(` 还是 `)`。只有一个 `Expanded` 占位的合并键。
+  void insertSmartParen() {
+    final int open = '('.allMatches(_text).length;
+    final int close = ')'.allMatches(_text).length;
+    final String paren = open > close ? ')' : '(';
+    applyEdit('insert', payload: paren);
+  }
+
+  /// 光标左移一格（键盘 `←`，UI-16）；到边界不动且不报错。
+  void moveCursorLeft() {
+    final int at =
+        (_selection.baseOffset - 1).clamp(0, _text.length).toInt();
+    _selection = TextSelection.collapsed(offset: at);
+    notifyListeners();
+  }
+
+  /// 光标右移一格（键盘 `→`，UI-16）；到边界不动且不报错。
+  void moveCursorRight() {
+    final int at =
+        (_selection.baseOffset + 1).clamp(0, _text.length).toInt();
+    _selection = TextSelection.collapsed(offset: at);
+    notifyListeners();
   }
 
   /// 清空当前输入（C 短按）。
   void clearInput() => setText('');
 
-  /// 提交求值（= 键）。
+  /// 提交求值（= / Enter / 结果长按）。
   ///
   /// 成功：结果写入历史、预览更新为该结果、清空输入、光标归零。
   /// 失败（含不完整表达式）：保留错误态与输入，不入历史。
@@ -145,6 +202,7 @@ class CalculatorController extends ChangeNotifier {
       expr: _text,
       result: result.display,
       ts: DateTime.now().millisecondsSinceEpoch,
+      usedMemory: _usedMemory,
     ));
     _preview = result.display;
     _base = result.base;
@@ -152,6 +210,37 @@ class CalculatorController extends ChangeNotifier {
     _errorSpan = null;
     _text = '';
     _selection = const TextSelection.collapsed(offset: 0);
+    _usedMemory = false;
+    _resultExplicit = true;
+    notifyListeners();
+  }
+
+  /// 记忆寄存器 `M+`：把"当前结果"累加进记忆（不动 `ans`）。
+  void memoryAdd() {
+    _memory = _engine.memoryAdd(_memoryOperand);
+    notifyListeners();
+  }
+
+  /// 记忆寄存器 `M-`：把"当前结果"从记忆中减去（不动 `ans`）。
+  void memorySubtract() {
+    _memory = _engine.memorySubtract(_memoryOperand);
+    notifyListeners();
+  }
+
+  /// 记忆寄存器 `MC`：清零（幂等）。
+  void memoryClear() {
+    _memory = _engine.memoryClear();
+    notifyListeners();
+  }
+
+  /// 记忆寄存器 `MR`：把记忆值插回表达式当前光标处（负值形如 `(-5)`）。
+  ///
+  /// 同时标记"本表达式用过 MR"，供历史条目打 `M` 标记（CP-16）。
+  void memoryRecall() {
+    final String literal = _memory.text;
+    _memory = _engine.memoryRecall();
+    applyEdit('insert', payload: literal);
+    _usedMemory = true;
     notifyListeners();
   }
 
@@ -161,7 +250,7 @@ class CalculatorController extends ChangeNotifier {
   /// 切换位宽：持久化 → 下发引擎 → 重算。
   Future<void> setWordSize(int wordSize) => _settings.setWordSize(wordSize);
 
-  /// 重置会话（C 长按）：保留 ans（Q9），清空输入与错误态。
+  /// 重置会话（C 长按）：清空输入与错误态、清零记忆（随 reset_session）。
   void reset() {
     _engine.resetSession(keepAns: true);
     _text = '';
@@ -170,6 +259,9 @@ class CalculatorController extends ChangeNotifier {
     _errorSpan = null;
     _base = null;
     _preview = '';
+    _usedMemory = false;
+    _resultExplicit = true;
+    _refreshMemory();
     _recomputePreview();
     notifyListeners();
   }
@@ -184,6 +276,23 @@ class CalculatorController extends ChangeNotifier {
     final EvalSettings s = _settings.settings;
     _engine.setAngleMode(s.angleMode);
     _engine.setWordSize(s.wordSize);
+  }
+
+  /// 记忆操作数：当前表达式文本（先求值）；为空时退回 `ans`。
+  String get _memoryOperand =>
+      _text.trim().isNotEmpty ? _text : 'ans';
+
+  /// 从引擎重新拉取记忆状态（reset / 构造时调用）。
+  void _refreshMemory() {
+    _memory = _engine.memoryRecall();
+  }
+
+  /// 文本被编辑后：清除"用过 MR"标记；手动模式下隐藏上一次提交的结果。
+  void _markEdited() {
+    _usedMemory = false;
+    if (!livePreview) {
+      _resultExplicit = false;
+    }
   }
 
   void _recomputePreview() {

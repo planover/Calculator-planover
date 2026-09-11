@@ -46,7 +46,7 @@ class FunctionTabs extends StatelessWidget {
             height: 96,
             child: TabBarView(
               children: <Widget>[
-                const _FunctionGrid(),
+                const ScientificFunctionGrid(),
                 const ConstantsPanel(),
                 const VariablesPanel(),
                 Center(
@@ -65,9 +65,11 @@ class FunctionTabs extends StatelessWidget {
   }
 }
 
-/// 科学函数网格。
-class _FunctionGrid extends StatelessWidget {
-  const _FunctionGrid();
+/// 科学函数网格（三角 / 对数 / 幂 / 阶乘 / 根号等）。
+///
+/// 同时被 [FunctionTabs]（函数页签）与 `ƒ` 键弹出的 [FunctionSheet] 复用（UI-07）。
+class ScientificFunctionGrid extends StatelessWidget {
+  const ScientificFunctionGrid();
 
   static const List<(String, String)> _fns = <(String, String)>[
     ('sin', 'sin('),

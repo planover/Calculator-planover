@@ -15,7 +15,9 @@ import 'src/engine/engine_gateway.dart';
 import 'src/state/calculator_controller.dart';
 import 'src/state/history_controller.dart';
 import 'src/state/locale_controller.dart';
+import 'src/state/region_format_controller.dart';
 import 'src/state/settings_controller.dart';
+import 'src/storage/region_format_store.dart';
 import 'src/storage/settings_store.dart';
 import 'src/storage/sqflite_history_repository.dart';
 import 'app.dart';
@@ -37,8 +39,11 @@ void main() async {
   final SettingsStore store = SharedPreferencesSettingsStore();
   final SettingsController settings = SettingsController(store: store);
   final LocaleController locale = LocaleController(store: store);
+  final RegionFormatController region =
+      RegionFormatController(store: SharedPreferencesRegionFormatStore());
   await settings.load();
   await locale.load();
+  await region.load();
 
   final HistoryController history = HistoryController(SqfliteHistoryRepository());
   await history.load();
@@ -54,6 +59,7 @@ void main() async {
   runApp(MyApp(
     settings: settings,
     locale: locale,
+    region: region,
     history: history,
     calculator: calc,
     engineOk: engine != null,

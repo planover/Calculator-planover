@@ -107,7 +107,33 @@ typedef ApplyEditNative = Pointer<Utf8> Function(Pointer<Utf8>);
 /// Dart 侧：`calc_apply_edit`。
 typedef ApplyEditDart = Pointer<Utf8> Function(Pointer<Utf8>);
 
-// ── 15. calc_string_free：返回 void ────────────────────────────
+// ── 15~18. 四个记忆寄存器导出（PRD §13.1 CP-01~07 / 主键盘 M 键） ──
+
+/// C 侧：`calc_memory_add`。
+typedef MemoryAddNative = Pointer<Utf8> Function(Pointer<Utf8>);
+
+/// Dart 侧：`calc_memory_add`。
+typedef MemoryAddDart = Pointer<Utf8> Function(Pointer<Utf8>);
+
+/// C 侧：`calc_memory_sub`。
+typedef MemorySubNative = Pointer<Utf8> Function(Pointer<Utf8>);
+
+/// Dart 侧：`calc_memory_sub`。
+typedef MemorySubDart = Pointer<Utf8> Function(Pointer<Utf8>);
+
+/// C 侧：`calc_memory_clear`。
+typedef MemoryClearNative = Pointer<Utf8> Function(Pointer<Utf8>);
+
+/// Dart 侧：`calc_memory_clear`。
+typedef MemoryClearDart = Pointer<Utf8> Function(Pointer<Utf8>);
+
+/// C 侧：`calc_memory_recall`。
+typedef MemoryRecallNative = Pointer<Utf8> Function(Pointer<Utf8>);
+
+/// Dart 侧：`calc_memory_recall`。
+typedef MemoryRecallDart = Pointer<Utf8> Function(Pointer<Utf8>);
+
+// ── 19. calc_string_free：返回 void ────────────────────────────
 /// C 侧：`calc_string_free(*mut c_char)`，**返回 void**。
 typedef FreeNative = Void Function(Pointer<Utf8>);
 
@@ -210,6 +236,27 @@ class FfiBindings {
       _lib.lookupFunction<ApplyEditNative, ApplyEditDart>('calc_apply_edit');
 
   // 15
+  /// `calc_memory_add`：`M+`，`memory = memory + 当前结果`。
+  late final MemoryAddDart memoryAdd =
+      _lib.lookupFunction<MemoryAddNative, MemoryAddDart>('calc_memory_add');
+
+  // 16
+  /// `calc_memory_sub`：`M-`，`memory = memory - 当前结果`。
+  late final MemorySubDart memorySub =
+      _lib.lookupFunction<MemorySubNative, MemorySubDart>('calc_memory_sub');
+
+  // 17
+  /// `calc_memory_clear`：`MC`，清零（幂等）。
+  late final MemoryClearDart memoryClear = _lib
+      .lookupFunction<MemoryClearNative, MemoryClearDart>('calc_memory_clear');
+
+  // 18
+  /// `calc_memory_recall`：`MR`，返回可回插到表达式的字面量。
+  late final MemoryRecallDart memoryRecall = _lib
+      .lookupFunction<MemoryRecallNative, MemoryRecallDart>(
+          'calc_memory_recall');
+
+  // 19
   /// `calc_string_free`：释放 Rust 分配的字符串。
   late final FreeDart free =
       _lib.lookupFunction<FreeNative, FreeDart>('calc_string_free');

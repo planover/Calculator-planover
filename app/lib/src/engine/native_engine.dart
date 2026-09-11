@@ -25,6 +25,7 @@ import '../models/convert_result.dart';
 import '../models/engine_error.dart';
 import '../models/eval_result.dart';
 import '../models/eval_settings.dart';
+import '../models/memory_state.dart';
 import '../models/unit_info.dart';
 import '../models/variable_info.dart';
 import '../utils/json_helpers.dart';
@@ -276,5 +277,35 @@ class NativeEngine implements EngineGateway {
       }),
     );
     return EditOutcome.fromJson(data);
+  }
+
+  @override
+  MemoryState memoryAdd(String value) {
+    final Map<String, dynamic> data = _invoke(
+      _bindings.memoryAdd,
+      payload: _payload(<String, Object?>{'value': value}),
+    );
+    return MemoryState.fromJson(data);
+  }
+
+  @override
+  MemoryState memorySubtract(String value) {
+    final Map<String, dynamic> data = _invoke(
+      _bindings.memorySubtract,
+      payload: _payload(<String, Object?>{'value': value}),
+    );
+    return MemoryState.fromJson(data);
+  }
+
+  @override
+  MemoryState memoryClear() {
+    final Map<String, dynamic> data = _invoke(_bindings.memoryClear);
+    return MemoryState.fromJson(data);
+  }
+
+  @override
+  MemoryState memoryRecall() {
+    final Map<String, dynamic> data = _invoke(_bindings.memoryRecall);
+    return MemoryState.fromJson(data);
   }
 }

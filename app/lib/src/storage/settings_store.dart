@@ -5,18 +5,41 @@
 /// - [MemorySettingsStore] 供 `flutter test` 注入，避免测试去碰平台插件通道
 ///   （架构 §T04 要点 8/R3 的同款思路：测试不加载任何原生依赖）。
 ///
-/// ⚠️ 本轮假设：架构只说"8 项设置 + SharedPreferences"，没规定主题归属。
-/// 这里把**主题模式**也纳入持久化（它是用户在设置页改的、需要记住的偏好），
-/// 并用自建枚举 [AppThemeMode] 而不是 Flutter 的 `ThemeMode` ——
-/// 目的是让本层**不依赖 material**，T05 的 `app_theme.dart` 再做一次映射。
+/// ⚠️ 本层把**主题模式**与**提交方式**也纳入持久化（它们是用户在设置页改的、
+/// 需要记住的偏好），并用自建枚举（`AppThemeMode` / `SubmitMode`）而不是 Flutter
+/// 的类型 —— 目的是让本层**不依赖 material**，T05 的 `app_theme.dart` 再做一次映射。
 library;
 
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/eval_settings.dart';
+import '../models/submit_mode.dart';
+import '../theme/app_theme.dart';
 
 /// 主题模式（与 Flutter `ThemeMode` 同构，但不引入 material 依赖）。
-enum AppThemeMode { system, light, dark }
+///
+/// 枚举值顺序即"原版 9 个 + 跟随系统"在前（PRD §4.2 TH-07），其后为本产品新增主题
+/// （TH-08 累计固定主题 ≥ 16 个）。`system` 必须排首位作为默认回落。
+enum AppThemeMode {
+  system,
+  dark,
+  darkAmoled,
+  light,
+  metroBlue,
+  metroGreen,
+  metroPurple,
+  oldGray,
+  violet,
+  blue,
+  highContrast,
+  nord,
+  dracula,
+  oneDark,
+  solarizedLight,
+  solarizedDark,
+  gruvboxDark,
+  monokai,
+}
 
 /// 设置存储。
 abstract class SettingsStore {
@@ -32,6 +55,12 @@ abstract class SettingsStore {
   /// 写入主题模式。
   Future<void> saveThemeMode(AppThemeMode mode);
 
+  /// 读取提交方式（calculate-on-fly / 手动）；默认 [SubmitMode.auto]。
+  Future<SubmitMode> loadSubmitMode();
+
+  /// 写入提交方式。
+  Future<void> saveSubmitMode(SubmitMode mode);
+
   /// 读取用户手动指定的语言标签；`null` 表示**跟随系统**。
   Future<String?> loadLocaleTag();
 
@@ -40,9 +69,6 @@ abstract class SettingsStore {
 }
 
 /// 基于 SharedPreferences 的实现。
-///
-/// 依赖在 `pubspec.yaml` 中声明为 `shared_preferences`；
-/// 插件在 Android 上把值落到 `SharedPreferences`，进程重启后仍然有效。
 class SharedPreferencesSettingsStore implements SettingsStore {
   /// 构造时可注入实例（测试里用 `SharedPreferences.setMockInitialValues` 即可）。
   const SharedPreferencesSettingsStore();
@@ -56,12 +82,12 @@ class SharedPreferencesSettingsStore implements SettingsStore {
   static const String _kFractionMode = 'settings.fraction_mode';
   static const String _kGrouping = 'settings.grouping';
   static const String _kThemeMode = 'settings.theme_mode';
+  static const String _kSubmitMode = 'settings.submit_mode';
   static const String _kLocaleTag = 'settings.locale_tag';
 
   @override
   Future<EvalSettings> loadSettings() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
-    // 逐项读取并夹到合法区间：磁盘上的值可能来自旧版本或被外部改坏
     final int precision = _clamp(
       prefs.getInt(_kPrecision) ?? EvalSettings.defaults.precision,
       minPrecision,
@@ -77,6 +103,7 @@ class SharedPreferencesSettingsStore implements SettingsStore {
           'deg': AngleMode.deg,
           'rad': AngleMode.rad,
           'grad': AngleMode.grad,
+          'turns': AngleMode.turns,
         },
         EvalSettings.defaults.angleMode,
       ),
@@ -87,6 +114,7 @@ class SharedPreferencesSettingsStore implements SettingsStore {
           'auto': Notation.auto,
           'scientific': Notation.scientific,
           'fixed': Notation.fixed,
+          'engineering': Notation.engineering,
         },
         EvalSettings.defaults.notation,
       ),
@@ -127,14 +155,13 @@ class SharedPreferencesSettingsStore implements SettingsStore {
   @override
   Future<AppThemeMode> loadThemeMode() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
-    return _enumFrom<AppThemeMode>(
-      prefs.getString(_kThemeMode),
-      const <String, AppThemeMode>{
-        'system': AppThemeMode.system,
-        'light': AppThemeMode.light,
-        'dark': AppThemeMode.dark,
-      },
-      AppThemeMode.system,
+    final String? raw = prefs.getString(_kThemeMode);
+    if (raw == null) {
+      return AppThemeMode.system;
+    }
+    return AppThemeMode.values.firstWhere(
+      (AppThemeMode e) => e.name == raw,
+      orElse: () => AppThemeMode.system,
     );
   }
 
@@ -142,6 +169,22 @@ class SharedPreferencesSettingsStore implements SettingsStore {
   Future<void> saveThemeMode(AppThemeMode mode) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kThemeMode, mode.name);
+  }
+
+  @override
+  Future<SubmitMode> loadSubmitMode() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String? raw = prefs.getString(_kSubmitMode);
+    if (raw == 'manual') {
+      return SubmitMode.manual;
+    }
+    return SubmitMode.auto;
+  }
+
+  @override
+  Future<void> saveSubmitMode(SubmitMode mode) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kSubmitMode, mode.name);
   }
 
   @override
@@ -177,13 +220,19 @@ class SharedPreferencesSettingsStore implements SettingsStore {
 /// 纯内存实现：测试注入用，行为与 SharedPreferences 版一致但不落盘。
 class MemorySettingsStore implements SettingsStore {
   /// 初始为空表示"从未存过"，读时回落默认值。
-  MemorySettingsStore({EvalSettings? settings, this.themeMode = AppThemeMode.system})
-      : _settings = settings;
+  MemorySettingsStore({
+    EvalSettings? settings,
+    this.themeMode = AppThemeMode.system,
+    this.submitMode = SubmitMode.auto,
+  }) : _settings = settings;
 
   EvalSettings? _settings;
 
   /// 当前主题（内存版直接暴露字段，便于测试断言）。
   AppThemeMode themeMode;
+
+  /// 当前提交方式。
+  SubmitMode submitMode;
 
   /// 手动指定的语言标签；`null` 表示"跟随系统"（与 [SettingsStore] 语义一致）。
   String? _localeTag;
@@ -202,6 +251,14 @@ class MemorySettingsStore implements SettingsStore {
   @override
   Future<void> saveThemeMode(AppThemeMode mode) async {
     themeMode = mode;
+  }
+
+  @override
+  Future<SubmitMode> loadSubmitMode() async => submitMode;
+
+  @override
+  Future<void> saveSubmitMode(SubmitMode mode) async {
+    submitMode = mode;
   }
 
   @override

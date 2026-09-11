@@ -37,6 +37,10 @@ class AngleModeSwitch extends StatelessWidget {
             value: AngleMode.grad,
             label: Text('GRAD'),
           ),
+          ButtonSegment<AngleMode>(
+            value: AngleMode.turns,
+            label: Text('TURNS'),
+          ),
         ],
         selected: <AngleMode>{angle},
         onSelectionChanged: (Set<AngleMode> selection) {

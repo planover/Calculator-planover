@@ -17,6 +17,7 @@ import 'src/l10n/locale_registry.dart';
 import 'src/state/calculator_controller.dart';
 import 'src/state/history_controller.dart';
 import 'src/state/locale_controller.dart';
+import 'src/state/region_format_controller.dart';
 import 'src/state/settings_controller.dart';
 import 'src/storage/settings_store.dart';
 import 'src/theme/app_theme.dart';
@@ -29,6 +30,7 @@ class MyApp extends StatelessWidget {
     super.key,
     required this.settings,
     required this.locale,
+    required this.region,
     required this.history,
     required this.calculator,
     required this.engineOk,
@@ -36,6 +38,7 @@ class MyApp extends StatelessWidget {
 
   final SettingsController settings;
   final LocaleController locale;
+  final RegionFormatController region;
   final HistoryController history;
   final CalculatorController calculator;
 
@@ -66,6 +69,7 @@ class MyApp extends StatelessWidget {
       providers: <SingleChildWidget>[
         ChangeNotifierProvider<SettingsController>.value(value: settings),
         ChangeNotifierProvider<LocaleController>.value(value: locale),
+        ChangeNotifierProvider<RegionFormatController>.value(value: region),
         ChangeNotifierProvider<HistoryController>.value(value: history),
         ChangeNotifierProvider<CalculatorController>.value(value: calculator),
       ],
@@ -83,11 +87,21 @@ class _ThemedApp extends StatelessWidget {
         Provider.of<SettingsController>(context, listen: true);
     final LocaleController locale =
         Provider.of<LocaleController>(context, listen: true);
+    final AppThemeMode mode = settings.themeMode;
+    final bool isSystem = mode == AppThemeMode.system;
+    // 固定主题：theme / darkTheme 同时设为该主题，配合 themeMode 强制生效，
+    // 不受系统深浅色切换影响（TH-04 仅对 system 生效）。
+    final ThemeData themed = isSystem
+        ? buildTheme(AppThemeMode.light)
+        : buildTheme(mode);
+    final ThemeData darkThemed = isSystem
+        ? buildTheme(AppThemeMode.dark)
+        : buildTheme(mode);
     return MaterialApp(
       title: locale.l10n.tr('ui.app.title', fallback: 'Calculator-planover'),
-      theme: buildTheme(AppThemeMode.light),
-      darkTheme: buildTheme(AppThemeMode.dark),
-      themeMode: toFlutterThemeMode(settings.themeMode),
+      theme: themed,
+      darkTheme: darkThemed,
+      themeMode: toFlutterThemeMode(mode),
       locale: locale.l10n.locale,
       supportedLocales:
           LocaleRegistry.supported.map((AppLocale a) => toFlutterLocale(a.tag)).toList(),

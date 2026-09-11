@@ -1,13 +1,13 @@
 /// 历史条目 —— **Dart 侧独有**的模型（Rust 不碰文件 IO，见架构 §1.2 关键不变量 4）。
 ///
 /// 对应 `sqflite_history_repository.dart` 的表结构：
-/// `history(id INTEGER PRIMARY KEY, expr TEXT, result TEXT, ts INTEGER, kind INTEGER)`。
+/// `history(id INTEGER PRIMARY KEY, expr TEXT, result TEXT, ts INTEGER, kind INTEGER,
+/// used_memory INTEGER)`。
 ///
 /// 约定：
 /// - `ts` 是 **毫秒时间戳**（`DateTime.now().millisecondsSinceEpoch`）；
-/// - `kind` 以 **整数**落库（0=普通计算，1=单位换算），避免 SQLite 里存字符串的歧义。
-///   ⚠️ 这是个**本轮做的假设**：架构只给了列名 `kind INTEGER`，没定义取值域，
-///   这里定为 0/1，若 T05 需要更多类型（如"常量查询"）往后追加即可。
+/// - `kind` 以 **整数**落库（0=普通计算，1=单位换算），避免 SQLite 里存字符串的歧义；
+/// - `used_memory` 以 **整数**落库（0/1），标记本条是否用过记忆寄存器 `M`（CP-16）。
 library;
 
 import '../utils/json_helpers.dart';
@@ -49,6 +49,7 @@ class HistoryEntry {
     required this.result,
     required this.ts,
     this.kind = HistoryKind.calculation,
+    this.usedMemory = false,
   });
 
   /// 自增主键；尚未落库时为 `null`。
@@ -66,6 +67,9 @@ class HistoryEntry {
   /// 条目种类。
   final HistoryKind kind;
 
+  /// 本条计算是否用过记忆寄存器 `M`（MR 回插，CP-16）。
+  final bool usedMemory;
+
   /// 从数据库行解析。
   factory HistoryEntry.fromMap(Map<String, dynamic> map) => HistoryEntry(
         id: readInt(map, 'id', 0),
@@ -73,6 +77,7 @@ class HistoryEntry {
         result: readString(map, 'result', ''),
         ts: readInt(map, 'ts', 0),
         kind: HistoryKindValue.fromValue(readInt(map, 'kind', 0)),
+        usedMemory: readInt(map, 'used_memory', 0) == 1,
       );
 
   /// 转成数据库行（`id` 为 null 时不写，交给 SQLite 自增）。
@@ -82,6 +87,7 @@ class HistoryEntry {
       'result': result,
       'ts': ts,
       'kind': kind.value,
+      'used_memory': usedMemory ? 1 : 0,
     };
     final int? i = id;
     if (i != null) {
@@ -97,6 +103,7 @@ class HistoryEntry {
         result: readString(json, 'result', ''),
         ts: readInt(json, 'ts', 0),
         kind: HistoryKindValue.fromValue(readInt(json, 'kind', 0)),
+        usedMemory: readInt(json, 'used_memory', 0) == 1,
       );
 
   /// 转成 JSON。
@@ -109,6 +116,7 @@ class HistoryEntry {
     String? result,
     int? ts,
     HistoryKind? kind,
+    bool? usedMemory,
   }) {
     return HistoryEntry(
       id: id ?? this.id,
@@ -116,9 +124,10 @@ class HistoryEntry {
       result: result ?? this.result,
       ts: ts ?? this.ts,
       kind: kind ?? this.kind,
+      usedMemory: usedMemory ?? this.usedMemory,
     );
   }
 
   @override
-  String toString() => 'HistoryEntry(#$id $expr = $result)';
+  String toString() => 'HistoryEntry(#$id $expr = $result, M=$usedMemory)';
 }

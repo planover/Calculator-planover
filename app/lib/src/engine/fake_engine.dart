@@ -9,6 +9,8 @@
 ///
 /// 唯一的例外是 [applyEdit] 的字符串插入/删除：它操作的是**文本**而不是数值，
 /// 不属于 C8 禁止的"数值运算"，且 UI 组件测试需要它来验证括号配对交互。
+///
+/// 记忆寄存器用一份内存状态模拟 `M+`/`M-`/`MC`/`MR`，便于记忆 UI 的组件测试断言。
 library;
 
 import '../models/base_repr.dart';
@@ -16,6 +18,7 @@ import '../models/constant_info.dart';
 import '../models/convert_result.dart';
 import '../models/eval_result.dart';
 import '../models/eval_settings.dart';
+import '../models/memory_state.dart';
 import '../models/number_value.dart';
 import '../models/unit_info.dart';
 import '../models/variable_info.dart';
@@ -65,6 +68,9 @@ class FakeEngine implements EngineGateway {
   /// 提交被调用的次数。
   int commitCalls = 0;
 
+  /// 记忆寄存器模拟值（组件测试用，[memoryAdd]/[memorySubtract] 把 [value] 当数值累加）。
+  double _mem = 0;
+
   EvalResult _fixedEval(String display) => EvalResult(
         // 固定用有理数 0 承载：Fake 不参与数值语义
         value: const NumberValue(
@@ -86,6 +92,18 @@ class FakeEngine implements EngineGateway {
         ],
         isInteger: true,
       );
+
+  MemoryState _memState() => MemoryState(
+        value: _mem.toString(),
+        display: _mem.toString(),
+        text: _mem == 0
+            ? '0'
+            : (_mem < 0 ? '(-$_mem)' : _mem.toString()),
+        isZero: _mem == 0,
+      );
+
+  /// 把记忆操作数当数值解析（测试里传 `5` / `ans` 等；ans 退化为 0 不影响断言）。
+  double _parse(String v) => double.tryParse(v) ?? 0;
 
   @override
   Map<String, dynamic> version() => const <String, dynamic>{
@@ -174,7 +192,9 @@ class FakeEngine implements EngineGateway {
   int setWordSize(int wordSize) => wordSize;
 
   @override
-  void resetSession({bool keepAns = true}) {}
+  void resetSession({bool keepAns = true}) {
+    _mem = 0;
+  }
 
   /// 文本编辑替身：**只做字符串插入/删除**，不碰任何数值语义。
   @override
@@ -217,4 +237,25 @@ class FakeEngine implements EngineGateway {
         );
     }
   }
+
+  @override
+  MemoryState memoryAdd(String value) {
+    _mem += _parse(value);
+    return _memState();
+  }
+
+  @override
+  MemoryState memorySubtract(String value) {
+    _mem -= _parse(value);
+    return _memState();
+  }
+
+  @override
+  MemoryState memoryClear() {
+    _mem = 0;
+    return _memState();
+  }
+
+  @override
+  MemoryState memoryRecall() => _memState();
 }

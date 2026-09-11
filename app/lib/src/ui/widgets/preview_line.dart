@@ -29,17 +29,28 @@ class PreviewLine extends StatelessWidget {
         Provider.of<LocaleController>(context, listen: true).l10n;
     final ThemeData theme = Theme.of(context);
 
+    // 手动模式下未显式提交则不展示结果（UI-12）；auto 模式始终实时展示。
+    if (!calc.resultVisible) {
+      return const SizedBox.shrink();
+    }
+
+    final String result = calc.resultText;
     if (calc.error == null) {
+      // 长结果自动缩字号（UI-03），保证不溢出。
+      final double fs = result.length > 12
+          ? (Tokens.fontSizePreview * 12 / result.length)
+              .clamp(12.0, Tokens.fontSizePreview)
+          : Tokens.fontSizePreview;
       return Align(
         alignment: Alignment.centerRight,
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           reverse: true,
           child: Text(
-            calc.preview,
+            result,
             textAlign: TextAlign.right,
             style: theme.textTheme.headlineSmall?.copyWith(
-              fontSize: Tokens.fontSizePreview,
+              fontSize: fs,
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),

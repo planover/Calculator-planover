@@ -13,6 +13,7 @@ import '../models/constant_info.dart';
 import '../models/convert_result.dart';
 import '../models/eval_result.dart';
 import '../models/eval_settings.dart';
+import '../models/memory_state.dart';
 import '../models/unit_info.dart';
 import '../models/variable_info.dart';
 
@@ -82,4 +83,18 @@ abstract class EngineGateway {
     required String action,
     String payload = '',
   });
+
+  /// 记忆寄存器 `M+`：`memory = memory + 当前结果`（[value] 为表达式，先求值再相加）。
+  ///
+  /// 返回操作后的记忆状态（含显示串与可回插字面量）。**不动 `ans`**。
+  MemoryState memoryAdd(String value);
+
+  /// 记忆寄存器 `M-`：`memory = memory - 当前结果`。**不动 `ans`**。
+  MemoryState memorySubtract(String value);
+
+  /// 记忆寄存器 `MC`：清零（幂等，对 0 无副作用）。
+  MemoryState memoryClear();
+
+  /// 记忆寄存器 `MR`：返回当前记忆状态（[MemoryState.text] 为可回插到表达式的字面量）。
+  MemoryState memoryRecall();
 }

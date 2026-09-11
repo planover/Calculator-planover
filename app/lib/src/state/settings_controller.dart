@@ -9,6 +9,7 @@ library;
 import 'package:flutter/foundation.dart';
 
 import '../models/eval_settings.dart';
+import '../models/submit_mode.dart';
 import '../storage/settings_store.dart';
 
 /// 设置状态。
@@ -20,6 +21,7 @@ class SettingsController extends ChangeNotifier {
 
   EvalSettings _settings = EvalSettings.defaults;
   AppThemeMode _themeMode = AppThemeMode.system;
+  SubmitMode _submitMode = SubmitMode.auto;
   bool _loaded = false;
 
   /// 当前求值/格式化设置。
@@ -27,6 +29,9 @@ class SettingsController extends ChangeNotifier {
 
   /// 当前主题模式。
   AppThemeMode get themeMode => _themeMode;
+
+  /// 当前提交方式（calculate-on-fly / 手动）。
+  SubmitMode get submitMode => _submitMode;
 
   /// 是否已从存储载入过（避免 UI 在载入前用默认值闪一下）。
   bool get isLoaded => _loaded;
@@ -37,6 +42,7 @@ class SettingsController extends ChangeNotifier {
     if (store != null) {
       _settings = await store.loadSettings();
       _themeMode = await store.loadThemeMode();
+      _submitMode = await store.loadSubmitMode();
     }
     _loaded = true;
     notifyListeners();
@@ -90,6 +96,13 @@ class SettingsController extends ChangeNotifier {
     _themeMode = mode;
     notifyListeners();
     await _store?.saveThemeMode(mode);
+  }
+
+  /// 改提交方式。
+  Future<void> setSubmitMode(SubmitMode mode) async {
+    _submitMode = mode;
+    notifyListeners();
+    await _store?.saveSubmitMode(mode);
   }
 
   /// 恢复默认。

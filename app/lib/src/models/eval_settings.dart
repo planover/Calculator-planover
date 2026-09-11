@@ -12,11 +12,11 @@ library;
 
 import '../utils/json_helpers.dart';
 
-/// 角度模式（对应 `AngleMode`）。
-enum AngleMode { deg, rad, grad }
+/// 角度模式（对应 `AngleMode`，含第 4 种 Turns，PRD §3 UI-22）。
+enum AngleMode { deg, rad, grad, turns }
 
-/// 记数法（对应 `Notation`）。
-enum Notation { auto, scientific, fixed }
+/// 记数法（对应 `Notation`；engineering 仅 Engineer 模式可用，PRD §13.2 CP-08/09）。
+enum Notation { auto, scientific, fixed, engineering }
 
 /// 精度模式（对应 `PrecisionMode`）。
 enum PrecisionMode { significant, decimalPlaces }
@@ -35,21 +35,23 @@ const List<int> validWordSizes = <int>[8, 16, 32, 64];
 
 /// 枚举 → JSON 字符串。
 extension AngleModeId on AngleMode {
-  /// 稳定标识。
+  /// 稳定标识（与 Rust `AngleMode::id` 一致）。
   String get id => const <AngleMode, String>{
         AngleMode.deg: 'deg',
         AngleMode.rad: 'rad',
         AngleMode.grad: 'grad',
+        AngleMode.turns: 'turns',
       }[this]!;
 }
 
 /// 枚举 → JSON 字符串。
 extension NotationId on Notation {
-  /// 稳定标识。
+  /// 稳定标识（与 Rust `Notation::from_id` 一致）。
   String get id => const <Notation, String>{
         Notation.auto: 'auto',
         Notation.scientific: 'scientific',
         Notation.fixed: 'fixed',
+        Notation.engineering: 'engineering',
       }[this]!;
 }
 
@@ -124,6 +126,7 @@ class EvalSettings {
           'deg': AngleMode.deg,
           'rad': AngleMode.rad,
           'grad': AngleMode.grad,
+          'turns': AngleMode.turns,
         },
       ),
       wordSize: readInt(json, 'word_size', 64),
@@ -135,6 +138,7 @@ class EvalSettings {
           'auto': Notation.auto,
           'scientific': Notation.scientific,
           'fixed': Notation.fixed,
+          'engineering': Notation.engineering,
         },
       ),
       precisionMode: readEnum<PrecisionMode>(
