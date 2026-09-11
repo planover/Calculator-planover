@@ -16,6 +16,7 @@ library;
 
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/widgets.dart' show Locale;
 import 'package:intl/number_symbols.dart' show NumberSymbols;
@@ -53,11 +54,12 @@ class AppLocalizations {
   static final Map<String, Map<String, dynamic>> _cache =
       <String, Map<String, dynamic>>{};
 
-  /// 从 assets 加载指定语言（失败逐级兜底）；测试请勿直接调用（依赖 Flutter 绑定）。
+  /// 从 assets 加载指定语言（失败逐级兜底）。依赖 Flutter 绑定（[rootBundle]）；
+  /// 在测试中调用需先 `TestWidgetsFlutterBinding.ensureInitialized()`。
   static Future<AppLocalizations> load(String? tag) async {
     final String resolved = LocaleRegistry.canonicalize(tag);
     final Map<String, dynamic> bundle = await _loadBundle(resolved);
-    final Map<String, dynamic> fallback = identical(bundle, _empty)
+    final Map<String, dynamic> fallback = resolved == LocaleRegistry.fallbackTag
         ? const <String, dynamic>{}
         : await _loadBundle(LocaleRegistry.fallbackTag);
     return AppLocalizations(resolved, bundle: bundle, fallback: fallback);
@@ -79,9 +81,10 @@ class AppLocalizations {
         _cache[tag] = m;
         return m;
       }
-    } catch (_) {
+    } catch (e, st) {
       // 语言包缺失是**预期内**的（110 档语言不可能一次性全部翻译完），
-      // 这里静默降级到兜底链，绝不让界面崩。
+      // 这里保留三级降级行为，但把真实失败原因打到日志，便于真机定位。
+      debugPrint('[i18n] 语言包加载失败: $tag -> $e\n$st');
     }
     return _empty;
   }
