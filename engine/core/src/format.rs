@@ -15,6 +15,8 @@ pub enum Notation {
     Auto,
     /// 科学计数法。
     Scientific,
+    /// 工程记数法：指数对齐到 3 的倍数（`1234.5` → `1.2345×10³`）。
+    Engineering,
     /// 定点。
     Fixed,
 }
@@ -25,6 +27,7 @@ impl Notation {
         match self {
             Notation::Auto => "auto",
             Notation::Scientific => "scientific",
+            Notation::Engineering => "engineering",
             Notation::Fixed => "fixed",
         }
     }
@@ -34,6 +37,7 @@ impl Notation {
         match s.trim().to_lowercase().as_str() {
             "auto" => Some(Notation::Auto),
             "scientific" => Some(Notation::Scientific),
+            "engineering" | "eng" => Some(Notation::Engineering),
             "fixed" => Some(Notation::Fixed),
             _ => None,
         }
@@ -276,6 +280,45 @@ fn render_sci(digits: &str, exp: i32, neg: bool) -> String {
     }
 }
 
+/// 工程记数法渲染：**指数对齐到 3 的倍数**，如 `1.2345×10³`、`12.3×10⁻³`。
+///
+/// `digits` 为有效数字串（不含小数点与符号），`exp` 为首位的十进制指数
+/// （即 `值 = d.ddd… × 10^exp`）。对齐后的指数为 0 时省略 `×10⁰`。
+fn render_engineering(digits: &str, exp: i32, neg: bool, group: bool) -> String {
+    // 把指数下调到 3 的倍数：mant_exp ∈ {0,1,2}，mantissa_exp 为 3 的倍数。
+    let mant_exp = ((exp % 3) + 3) % 3;
+    let mantissa_exp = exp - mant_exp;
+    let point = (mant_exp + 1) as usize;
+    let body = if digits.len() <= point {
+        format!("{}{}", digits, "0".repeat(point - digits.len()))
+    } else {
+        format!("{}.{}", &digits[..point], &digits[point..])
+    };
+    let all_zero = digits.chars().all(|c| c == '0');
+    let mut mant = trim_zeros(&body);
+    if neg && !all_zero && mant != "0" {
+        mant.insert(0, '-');
+    }
+    let mant = apply_group(&mant, group);
+    if mantissa_exp == 0 {
+        mant
+    } else {
+        format!("{}×10{}", mant, superscript(mantissa_exp))
+    }
+}
+
+/// 工程记数法的完整渲染：整数走全精度，其余走当前有效位数。
+fn engineering_number(n: &Num, s: &NumberFormatSettings) -> String {
+    if let Ok(i) = n.try_as_i64() {
+        let digits = i.unsigned_abs().to_string();
+        let exp = digits.len() as i32 - 1;
+        return render_engineering(&digits, exp, i < 0, s.grouping);
+    }
+    let v = n.to_f64();
+    let (digits, exp, neg) = sig_parts(v, s.precision);
+    render_engineering(&digits, exp, neg, s.grouping)
+}
+
 /// 把有理数写成有限十进制串；分母含 2/5 以外的因子则返回 `None`。
 pub fn exact_decimal_string(num: i64, den: i64) -> Option<String> {
     if den == 0 {
@@ -390,6 +433,12 @@ pub fn format_number(n: &Num, s: &NumberFormatSettings) -> Result<String> {
         if let Some(f) = format_fraction(n, s.fraction_mode) {
             return Ok(f);
         }
+    }
+
+    // 工程记数法：整数与小数统一处理，且**优先于**精确十进制捷径
+    // （CP-08 要求 `0.0123` 显示为 `12.3×10⁻³` 而非精确串 `0.0123`）。
+    if matches!(s.notation, Notation::Engineering) {
+        return Ok(engineering_number(n, s));
     }
 
     // 整数：不受精度截断（否则 20! 会被有效位砍掉）。

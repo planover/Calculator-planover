@@ -8,6 +8,7 @@ use crate::constants::{self, ConstantDef};
 use crate::error::{EngineError, ErrorKind, Result};
 use crate::eval::{self, EvalContext};
 use crate::format;
+use crate::memory::Memory;
 use crate::num::Num;
 use crate::parser::Parser;
 use crate::session::{AngleMode, EngineSettings, Session, VariableInfo};
@@ -93,6 +94,11 @@ pub struct FormattedValue {
 #[derive(Debug, Clone)]
 pub struct Engine {
     session: Session,
+    /// 记忆寄存器（`M+`/`M-`/`MC`/`MR` 后端）。
+    ///
+    /// **独立于 `ans`**（已裁决 Q13-1）：`M+`/`M-` 不改 `ans`，改 `ans` 不改记忆；
+    /// 随 [`Engine::reset_session`] 清零。数值模型与 [`Session`] 一致，均为 [`Num`]。
+    memory: Memory,
 }
 
 impl Default for Engine {
@@ -106,6 +112,7 @@ impl Engine {
     pub fn new() -> Self {
         Self {
             session: Session::new(),
+            memory: Memory::new(),
         }
     }
 
@@ -160,8 +167,12 @@ impl Engine {
     }
 
     /// 重置会话（清变量，**保留 ans**）。
+    ///
+    /// **记忆寄存器一并清零**（已裁决 Q13-1：记忆随 `reset_session` 清零，与 `ans`
+    /// 的处理对齐）。注意"清空历史"是 Dart 侧行为、不经过本方法，因此不清零内存。
     pub fn reset_session(&mut self) {
         self.session.reset();
+        self.memory.clear();
     }
 
     /// 预览求值。
@@ -317,6 +328,39 @@ impl Engine {
             is_integer: value.is_int(),
         })
     }
+
+    // ── 记忆寄存器（`M+` / `M-` / `MC` / `MR`，PRD-INCREMENT-v2 §13.1）─────
+
+    /// 当前记忆值（只读）。
+    pub fn memory_value(&self) -> Num {
+        self.memory.value()
+    }
+
+    /// 记忆是否为空（`== 0`）。UI 据此决定是否显示 `M` 指示器（CP-07）。
+    pub fn memory_is_zero(&self) -> bool {
+        self.memory.is_zero()
+    }
+
+    /// `M+`：`memory = memory + v`，返回更新后的记忆值。**不影响 `ans`**。
+    pub fn memory_add(&mut self, v: &Num) -> Num {
+        self.memory.add(v)
+    }
+
+    /// `M-`：`memory = memory - v`，返回更新后的记忆值。**不影响 `ans`**。
+    pub fn memory_subtract(&mut self, v: &Num) -> Num {
+        self.memory.subtract(v)
+    }
+
+    /// `MC`：清零（幂等）。返回清零后的记忆值（恒为 0）。
+    pub fn memory_clear(&mut self) -> Num {
+        self.memory.clear();
+        self.memory.value()
+    }
+
+    /// `MR`：生成可**原样回插**到表达式的字面量（负值形如 `(-5)`）。
+    pub fn memory_recall_text(&self) -> String {
+        self.memory.recall_text()
+    }
 }
 
 #[cfg(test)]
@@ -412,5 +456,58 @@ mod tests {
         e.set_word_size(16).unwrap();
         assert_eq!(e.settings().word_size, 16);
         assert!(e.set_word_size(24).is_err());
+    }
+
+    #[test]
+    fn memory_starts_empty() {
+        let e = Engine::new();
+        assert!(e.memory_is_zero());
+        assert_eq!(e.memory_value(), Num::zero());
+        assert_eq!(e.memory_recall_text(), "0");
+    }
+
+    #[test]
+    fn memory_add_and_subtract_accumulate() {
+        let mut e = Engine::new();
+        assert_eq!(e.memory_add(&Num::int(5)), Num::int(5));
+        assert_eq!(e.memory_add(&Num::int(5)), Num::int(10));
+        assert_eq!(e.memory_subtract(&Num::int(5)), Num::int(5));
+        assert_eq!(e.memory_subtract(&Num::int(5)), Num::zero());
+        assert_eq!(e.memory_subtract(&Num::int(5)), Num::int(-5));
+        assert_eq!(e.memory_recall_text(), "(-5)");
+    }
+
+    #[test]
+    fn memory_is_independent_of_ans() {
+        let mut e = Engine::new();
+        // M+ 不改 ans
+        e.evaluate_commit("5").unwrap();
+        assert_eq!(e.session.ans, Some(Num::int(5)));
+        e.memory_add(&Num::int(5));
+        assert_eq!(e.memory_value(), Num::int(5));
+        assert_eq!(e.session.ans, Some(Num::int(5)));
+        // 改 ans 不改 memory
+        e.evaluate_commit("99").unwrap();
+        assert_eq!(e.session.ans, Some(Num::int(99)));
+        assert_eq!(e.memory_value(), Num::int(5));
+    }
+
+    #[test]
+    fn reset_session_clears_memory_but_clear_is_idempotent() {
+        let mut e = Engine::new();
+        e.memory_add(&Num::int(7));
+        assert!(!e.memory_is_zero());
+        // MC 幂等
+        assert_eq!(e.memory_clear(), Num::zero());
+        assert_eq!(e.memory_clear(), Num::zero());
+        assert!(e.memory_is_zero());
+        // reset_session 一并清零
+        e.memory_add(&Num::int(42));
+        assert!(!e.memory_is_zero());
+        e.evaluate_commit("1").unwrap();
+        e.reset_session();
+        assert!(e.memory_is_zero());
+        // ans 仍保留（与既有语义一致）
+        assert_eq!(e.session.get_var("ans").unwrap(), Num::int(1));
     }
 }

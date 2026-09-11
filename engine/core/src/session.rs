@@ -20,6 +20,8 @@ pub enum AngleMode {
     Rad,
     /// 百分度（gon）。
     Grad,
+    /// 圈（turn）：`1 turn = 2π rad`。
+    Turns,
 }
 
 impl AngleMode {
@@ -29,6 +31,7 @@ impl AngleMode {
             AngleMode::Deg => v * std::f64::consts::PI / 180.0,
             AngleMode::Rad => v,
             AngleMode::Grad => v * std::f64::consts::PI / 200.0,
+            AngleMode::Turns => v * 2.0 * std::f64::consts::PI,
         }
     }
 
@@ -38,6 +41,7 @@ impl AngleMode {
             AngleMode::Deg => v * 180.0 / std::f64::consts::PI,
             AngleMode::Rad => v,
             AngleMode::Grad => v * 200.0 / std::f64::consts::PI,
+            AngleMode::Turns => v / (2.0 * std::f64::consts::PI),
         }
     }
 
@@ -47,6 +51,7 @@ impl AngleMode {
             AngleMode::Deg => "deg",
             AngleMode::Rad => "rad",
             AngleMode::Grad => "grad",
+            AngleMode::Turns => "turns",
         }
     }
 
@@ -56,6 +61,7 @@ impl AngleMode {
             "deg" | "degree" => Some(AngleMode::Deg),
             "rad" | "radian" => Some(AngleMode::Rad),
             "grad" | "gon" => Some(AngleMode::Grad),
+            "turns" | "turn" => Some(AngleMode::Turns),
             _ => None,
         }
     }

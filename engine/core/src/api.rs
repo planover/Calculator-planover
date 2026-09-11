@@ -245,7 +245,30 @@ pub struct ListUnitsRequest {
     pub category: Option<String>,
 }
 
+/// 记忆操作请求（`M+`/`M-`）：`value` 为待运算的**表达式**（如当前结果 `"5"` 或 `"ans"`）。
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct MemoryValueRequest {
+    /// 表达式，先求值再参与 `M+`/`M-`。
+    #[serde(default)]
+    pub value: String,
+}
+
 // ── 响应 DTO ────────────────────────────────────────────────
+
+/// 记忆寄存器回执。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct MemoryDto {
+    /// 记忆值。
+    pub value: NumDto,
+    /// 按当前格式设置渲染的显示串。
+    pub display: String,
+    /// 可回插到表达式的字面量（`MR` 用；负值形如 `(-5)`）。
+    pub text: String,
+    /// 是否为 0（UI 据此决定是否显示 `M` 指示器，CP-07）。
+    pub is_zero: bool,
+}
 
 /// 数值的 JSON 形态（内部标签 `kind`）。
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -811,6 +834,37 @@ pub fn dispatch(method: &str, payload_json: &str, engine: &mut Engine) -> String
             Err(e) => err(&e),
         },
 
+        "memory_add" => match parse_payload::<MemoryValueRequest>(payload_json) {
+            Ok(req) => match handle_memory_add(engine, &req) {
+                Ok(d) => ok(&d),
+                Err(e) => err(&e),
+            },
+            Err(e) => err(&e),
+        },
+
+        "memory_sub" | "memory_subtract" => {
+            match parse_payload::<MemoryValueRequest>(payload_json) {
+                Ok(req) => match handle_memory_sub(engine, &req) {
+                    Ok(d) => ok(&d),
+                    Err(e) => err(&e),
+                },
+                Err(e) => err(&e),
+            }
+        }
+
+        "memory_clear" => {
+            engine.memory_clear();
+            match memory_dto(engine) {
+                Ok(d) => ok(&d),
+                Err(e) => err(&e),
+            }
+        }
+
+        "memory_recall" => match memory_dto(engine) {
+            Ok(d) => ok(&d),
+            Err(e) => err(&e),
+        },
+
         other => err(&EngineError::with_message(
             ErrorKind::InvalidRequest,
             format!("未知方法 {}", other),
@@ -870,6 +924,32 @@ fn handle_format_number(engine: &Engine, req: &FormatNumberRequest) -> Result<Fo
         }
         None => Ok(FormattedValueDto::of(&engine.format_number(&v)?)),
     }
+}
+
+/// 组装记忆寄存器回执（值 + 显示串 + 回插字面量 + 是否为零）。
+fn memory_dto(engine: &Engine) -> Result<MemoryDto> {
+    let v = engine.memory_value();
+    let display = crate::format::format_number(&v, &engine.settings().format)?;
+    Ok(MemoryDto {
+        value: NumDto::of(&v),
+        display,
+        text: engine.memory_recall_text(),
+        is_zero: engine.memory_is_zero(),
+    })
+}
+
+/// `M+`：先把 `value` 当表达式求值（支持 `ans`/变量），再加进记忆。**不动 `ans`**。
+fn handle_memory_add(engine: &mut Engine, req: &MemoryValueRequest) -> Result<MemoryDto> {
+    let value = engine.evaluate_preview(&req.value)?.value;
+    engine.memory_add(&value);
+    memory_dto(engine)
+}
+
+/// `M-`：先把 `value` 当表达式求值，再从记忆里减去。**不动 `ans`**。
+fn handle_memory_sub(engine: &mut Engine, req: &MemoryValueRequest) -> Result<MemoryDto> {
+    let value = engine.evaluate_preview(&req.value)?.value;
+    engine.memory_subtract(&value);
+    memory_dto(engine)
 }
 
 #[cfg(test)]
@@ -1077,5 +1157,53 @@ mod tests {
             assert!(!out.is_empty());
             serde_json::from_str::<Value>(&out).expect("必须是合法 JSON");
         }
+    }
+
+    #[test]
+    fn memory_contract() {
+        let mut e = Engine::new();
+        // 初值 0（CP-01）
+        let out = dispatch("memory_recall", "{}", &mut e);
+        let v: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["data"]["is_zero"], true);
+        assert_eq!(v["data"]["text"], "0");
+
+        // M+ 5 → 5；M+ 5 → 10（CP-02）
+        dispatch("memory_add", r#"{"value":"5"}"#, &mut e);
+        let out = dispatch("memory_add", r#"{"value":"5"}"#, &mut e);
+        let v: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["data"]["value"]["num"], 10);
+        assert_eq!(v["data"]["is_zero"], false);
+
+        // M- 5 → 5；再 M- 5 → 0（CP-03）
+        dispatch("memory_sub", r#"{"value":"5"}"#, &mut e);
+        let out = dispatch("memory_sub", r#"{"value":"5"}"#, &mut e);
+        let v: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["data"]["value"]["num"], 0);
+        // 别名 memory_subtract 语义一致
+        let out = dispatch("memory_subtract", r#"{"value":"3"}"#, &mut e);
+        assert_eq!(
+            serde_json::from_str::<Value>(&out).unwrap()["data"]["value"]["num"],
+            -3
+        );
+
+        // MC → 0（CP-04）
+        let out = dispatch("memory_clear", "{}", &mut e);
+        let v: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["data"]["is_zero"], true);
+    }
+
+    #[test]
+    fn memory_cleared_on_reset_session() {
+        let mut e = Engine::new();
+        dispatch("memory_add", r#"{"value":"8"}"#, &mut e);
+        // Q13-1：记忆随 reset_session 清零
+        dispatch("reset_session", r#"{"keep_ans":true}"#, &mut e);
+        let out = dispatch("memory_recall", "{}", &mut e);
+        assert_eq!(
+            serde_json::from_str::<Value>(&out).unwrap()["data"]["is_zero"],
+            true
+        );
     }
 }

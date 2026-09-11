@@ -416,6 +416,60 @@ fn f_atanh(args: &[Num], _ctx: &EvalContext) -> Result<Num> {
     Ok(Num::float(x.atanh()))
 }
 
+/// `cot(x) = cos(x)/sin(x)`；入参按当前角度单位换算。极点（sin = 0）返回 `DomainError`。
+fn f_cot(args: &[Num], ctx: &EvalContext) -> Result<Num> {
+    let r = ctx.session.settings.angle_mode.to_radians(need(args, 0));
+    let s = r.sin();
+    if s == 0.0 {
+        return Err(domain_err("cot"));
+    }
+    Ok(Num::float(r.cos() / s))
+}
+
+/// `acot(x) = π/2 − atan(x)`，值域 `(0, π)`（已裁决 Q13-3）；返回值按当前角度单位。
+fn f_acot(args: &[Num], ctx: &EvalContext) -> Result<Num> {
+    let x = need(args, 0);
+    let r = std::f64::consts::FRAC_PI_2 - x.atan();
+    Ok(Num::float(ctx.session.settings.angle_mode.from_radians(r)))
+}
+
+/// `coth(x) = cosh(x)/sinh(x)`；`coth(0)` 返回 `DomainError`。
+fn f_coth(args: &[Num], _ctx: &EvalContext) -> Result<Num> {
+    let x = need(args, 0);
+    let s = x.sinh();
+    if s == 0.0 {
+        return Err(domain_err("coth"));
+    }
+    Ok(Num::float(x.cosh() / s))
+}
+
+/// `acoth(x) = ½·ln((x+1)/(x−1))`；定义域 `|x| > 1`，越界返回 `DomainError`。
+fn f_acoth(args: &[Num], _ctx: &EvalContext) -> Result<Num> {
+    let x = need(args, 0);
+    if x.abs() <= 1.0 {
+        return Err(domain_err("acoth"));
+    }
+    Ok(Num::float(0.5 * ((x + 1.0) / (x - 1.0)).ln()))
+}
+
+/// `sgn(x)`：正 1 / 零 0 / 负 −1（`sgn(0) = 0`，已裁决 Q13-4）。
+fn f_sgn(args: &[Num], _ctx: &EvalContext) -> Result<Num> {
+    let x = need(args, 0);
+    Ok(Num::int(if x > 0.0 {
+        1
+    } else if x < 0.0 {
+        -1
+    } else {
+        0
+    }))
+}
+
+/// `frac(x) = x − trunc(x)`，**保留符号**（已裁决 Q13-5，`frac(-3.25) = -0.25`）。
+fn f_frac(args: &[Num], _ctx: &EvalContext) -> Result<Num> {
+    let x = need(args, 0);
+    Ok(Num::float(x - x.trunc()))
+}
+
 fn f_rand(_args: &[Num], _ctx: &EvalContext) -> Result<Num> {
     Ok(Num::float(next_random()))
 }
@@ -475,6 +529,13 @@ pub static FUNCTIONS: &[FunctionDef] = &[
     FunctionDef { name: "not", arity: Arity::Fixed(1), category: FuncCategory::Bits, insert_template: "not(", aliases: &[], eval: f_not },
     FunctionDef { name: "shl", arity: Arity::Fixed(2), category: FuncCategory::Bits, insert_template: "shl(,)", aliases: &[], eval: f_shl },
     FunctionDef { name: "shr", arity: Arity::Fixed(2), category: FuncCategory::Bits, insert_template: "shr(,)", aliases: &[], eval: f_shr },
+    // 补全（U5 §13.3，CP-10~CP-15）
+    FunctionDef { name: "cot", arity: Arity::Fixed(1), category: FuncCategory::Trig, insert_template: "cot(", aliases: &[], eval: f_cot },
+    FunctionDef { name: "acot", arity: Arity::Fixed(1), category: FuncCategory::Trig, insert_template: "acot(", aliases: &[], eval: f_acot },
+    FunctionDef { name: "coth", arity: Arity::Fixed(1), category: FuncCategory::Trig, insert_template: "coth(", aliases: &[], eval: f_coth },
+    FunctionDef { name: "acoth", arity: Arity::Fixed(1), category: FuncCategory::Trig, insert_template: "acoth(", aliases: &[], eval: f_acoth },
+    FunctionDef { name: "sgn", arity: Arity::Fixed(1), category: FuncCategory::Misc, insert_template: "sgn(", aliases: &[], eval: f_sgn },
+    FunctionDef { name: "frac", arity: Arity::Fixed(1), category: FuncCategory::Rounding, insert_template: "frac(", aliases: &[], eval: f_frac },
     // 随机
     FunctionDef { name: "rand", arity: Arity::Fixed(0), category: FuncCategory::Misc, insert_template: "rand()", aliases: &[], eval: f_rand },
 ];
@@ -527,6 +588,10 @@ pub fn angle_mode_factors(m: AngleMode) -> (f64, f64) {
         AngleMode::Deg => (std::f64::consts::PI / 180.0, 180.0 / std::f64::consts::PI),
         AngleMode::Rad => (1.0, 1.0),
         AngleMode::Grad => (std::f64::consts::PI / 200.0, 200.0 / std::f64::consts::PI),
+        AngleMode::Turns => (
+            2.0 * std::f64::consts::PI,
+            1.0 / (2.0 * std::f64::consts::PI),
+        ),
     }
 }
 
@@ -667,7 +732,8 @@ mod tests {
         for n in ["sin", "cos", "tan", "asin", "acos", "atan", "ln", "log", "log2", "log10",
                   "exp", "sqrt", "cbrt", "abs", "fact", "mod", "min", "max", "floor", "ceil",
                   "round", "trunc", "gcd", "lcm", "and", "or", "xor", "not", "shl", "shr",
-                  "sinh", "cosh", "tanh", "asinh", "acosh", "atanh", "rand", "pow", "root", "sq", "cube", "inv", "neg", "exp10"] {
+                  "sinh", "cosh", "tanh", "asinh", "acosh", "atanh", "rand", "pow", "root", "sq", "cube", "inv", "neg", "exp10",
+                  "cot", "acot", "coth", "acoth", "sgn", "frac"] {
             assert!(is_function_name(n), "缺少函数 {}", n);
         }
     }

@@ -23,6 +23,7 @@ pub mod eval;
 pub mod format;
 pub mod functions;
 pub mod lexer;
+pub mod memory;
 pub mod num;
 pub mod parser;
 pub mod session;

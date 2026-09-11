@@ -151,6 +151,30 @@ pub extern "C" fn calc_apply_edit(req: *const c_char) -> *mut c_char {
     call("apply_edit", req)
 }
 
+/// 记忆寄存器 `M+`：`memory = memory + 当前结果`（`{"value":"<表达式>"}`）。
+#[no_mangle]
+pub extern "C" fn calc_memory_add(req: *const c_char) -> *mut c_char {
+    call("memory_add", req)
+}
+
+/// 记忆寄存器 `M-`：`memory = memory - 当前结果`。
+#[no_mangle]
+pub extern "C" fn calc_memory_sub(req: *const c_char) -> *mut c_char {
+    call("memory_sub", req)
+}
+
+/// 记忆寄存器 `MC`：清零（幂等）。
+#[no_mangle]
+pub extern "C" fn calc_memory_clear(req: *const c_char) -> *mut c_char {
+    call("memory_clear", req)
+}
+
+/// 记忆寄存器 `MR`：返回可回插到表达式的字面量（负值形如 `(-5)`）。
+#[no_mangle]
+pub extern "C" fn calc_memory_recall(req: *const c_char) -> *mut c_char {
+    call("memory_recall", req)
+}
+
 /// 释放本库分配的 C 字符串。
 ///
 /// 对 `nullptr` 调用是安全的 no-op；**同一指针禁止释放两次**。
