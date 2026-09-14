@@ -50,6 +50,7 @@ String formatDateTime(DateTime dt, {DateTime? now}) {
 }
 
 /// 补零到两位。
+// ignore: non_constant_identifier_names
 String _2(int v) => v < 10 ? '0$v' : '$v';
 
 // ── 区域格式化的历史时间戳（RF-T-06 / RF-D-07）────────────────────

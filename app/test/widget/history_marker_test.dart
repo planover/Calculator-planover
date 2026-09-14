@@ -51,13 +51,13 @@ void main() {
       history: history,
     );
     await history.load();
-    await history.add(HistoryEntry(
+    await history.add(const HistoryEntry(
       expr: 'MR',
       result: '5',
       ts: 1,
       usedMemory: true,
     ));
-    await history.add(HistoryEntry(
+    await history.add(const HistoryEntry(
       expr: '1+2',
       result: '3',
       ts: 2,

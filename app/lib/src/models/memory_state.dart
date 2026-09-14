@@ -32,7 +32,7 @@ class MemoryState {
   factory MemoryState.fromJson(Object? json) {
     final Map<String, dynamic>? m = readMap(json, 'data');
     final Map<String, dynamic> data =
-        m ?? (json is Map ? Map<String, dynamic>.from(json as Map) : <String, dynamic>{});
+        m ?? (json is Map ? Map<String, dynamic>.from(json) : <String, dynamic>{});
     return MemoryState(
       value: _numToString(readMap(data, 'value')),
       display: readString(data, 'display', '0'),

@@ -257,7 +257,7 @@ void main() {
     });
 
     test('历史条目默认不带 id（交给 SQLite 自增）', () {
-      final HistoryEntry e = HistoryEntry(
+      final HistoryEntry e = const HistoryEntry(
         expr: 'sin(30)',
         result: '0.5',
         ts: 1700000000001,

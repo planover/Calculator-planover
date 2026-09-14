@@ -292,7 +292,7 @@ class NativeEngine implements EngineGateway {
   @override
   MemoryState memorySubtract(String value) {
     final Map<String, dynamic> data = _invoke(
-      _bindings.memorySubtract,
+      _bindings.memorySub,
       payload: _payload(<String, Object?>{'value': value}),
     );
     return MemoryState.fromJson(data);

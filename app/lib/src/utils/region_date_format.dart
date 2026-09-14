@@ -480,9 +480,11 @@ abstract final class RegionDateFormatter {
   }
 
   /// 补零到两位。
+  // ignore: non_constant_identifier_names
   static String _2(int v) => v < 10 ? '0$v' : '$v';
 
   /// 补零到四位。
+  // ignore: non_constant_identifier_names
   static String _4(int v) {
     if (v >= 1000) {
       return '$v';

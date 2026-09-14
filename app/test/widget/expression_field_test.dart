@@ -27,11 +27,11 @@ Widget _harness(CalculatorController calc, LocaleController locale) => MultiProv
         ChangeNotifierProvider<CalculatorController>.value(value: calc),
         ChangeNotifierProvider<LocaleController>.value(value: locale),
       ],
-      child: MaterialApp(
+      child: const MaterialApp(
         home: Scaffold(
           body: Column(
             children: <Widget>[
-              const ExpressionField(),
+              ExpressionField(),
               SizedBox(height: 420, child: Keypad()),
             ],
           ),

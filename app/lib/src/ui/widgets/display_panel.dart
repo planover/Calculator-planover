@@ -34,8 +34,8 @@ class DisplayPanel extends StatelessWidget {
             onLongPress: () => calc.commit(),
             child: const PreviewLine(),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(
+          const Padding(
+            padding: EdgeInsets.symmetric(
               horizontal: Tokens.displayPad,
               vertical: Tokens.padSm,
             ),
@@ -43,12 +43,12 @@ class DisplayPanel extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: <Widget>[
                 // 记忆寄存器 `M` 指示器与 `Ans` 指示器采用不同视觉样式（CP-17）。
-                const _AnsIndicator(),
+                _AnsIndicator(),
                 Row(
                   children: <Widget>[
-                    const MemoryIndicator(),
-                    const SizedBox(width: Tokens.padSm),
-                    const AngleModeSwitch(),
+                    MemoryIndicator(),
+                    SizedBox(width: Tokens.padSm),
+                    AngleModeSwitch(),
                   ],
                 ),
               ],

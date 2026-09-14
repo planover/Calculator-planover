@@ -66,9 +66,9 @@ class LocaleController extends ChangeNotifier {
   /// 从存储恢复手动语言，并探测系统语言，最后加载对应本地化。
   Future<void> load() async {
     _manualTag = await _store?.loadLocaleTag();
-    // 纯单测里 WidgetsBinding.instance 可能为 null，这里用 ?. 安全降级。
-    final WidgetsBinding? b = WidgetsBinding.instance;
-    _systemLocale = b?.platformDispatcher.locale;
+    // 纯单测里 WidgetsBinding.instance 可能未初始化（会抛异常），这里用 try 安全降级。
+    final WidgetsBinding b = WidgetsBinding.instance;
+    _systemLocale = b.platformDispatcher.locale;
     await _apply();
   }
 

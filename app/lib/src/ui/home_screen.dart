@@ -75,7 +75,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              Expanded(child: Keypad()),
+              const Expanded(child: Keypad()),
             ],
           ),
         ),

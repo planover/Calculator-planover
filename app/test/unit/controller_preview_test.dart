@@ -25,7 +25,7 @@ class _IncompleteFakeEngine extends FakeEngine {
     EvalSettings? settings,
   }) {
     previewCalls++;
-    throw EngineException(
+    throw const EngineException(
       code: 1,
       kind: 'incomplete_expression',
       message: '表达式不完整',

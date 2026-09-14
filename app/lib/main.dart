@@ -37,7 +37,7 @@ void main() async {
     debugPrint(stack.toString());
   }
 
-  final SettingsStore store = SharedPreferencesSettingsStore();
+  final SettingsStore store = const SharedPreferencesSettingsStore();
   final SettingsController settings = SettingsController(store: store);
   final LocaleController locale = LocaleController(store: store);
 
@@ -50,7 +50,7 @@ void main() async {
   // 区域格式 → 引擎：把 Dart 侧镜像的数字/货币配置经 `set_region_format` 下发（A1）。
   // 回调捕获 `activeEngine`；启动时若引擎不可用，activeEngine 为 FakeEngine（无害替身）。
   final RegionFormatController region = RegionFormatController(
-    store: SharedPreferencesRegionFormatStore(),
+    store: const SharedPreferencesRegionFormatStore(),
     onRegionFormatChanged: (RegionFormatRequest request) {
       try {
         activeEngine.setRegionFormat(request);

@@ -168,7 +168,7 @@ class _RegionRow extends StatelessWidget {
           DropdownButton<String?>(
             isExpanded: true,
             value: region.isAuto ? null : region.regionTag,
-            items: RegionFormat.options
+            items: RegionRegistry.options
                 .map(
                   (RegionFormat? r) => DropdownMenuItem<String?>(
                     value: r?.tag,
@@ -220,6 +220,7 @@ class _LanguageRow extends StatelessWidget {
 }
 
 class _AngleRow extends StatelessWidget {
+  const _AngleRow();
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n =
@@ -255,6 +256,7 @@ class _AngleRow extends StatelessWidget {
 }
 
 class _WordSizeRow extends StatelessWidget {
+  const _WordSizeRow();
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n =
@@ -281,6 +283,7 @@ class _WordSizeRow extends StatelessWidget {
 }
 
 class _NotationRow extends StatelessWidget {
+  const _NotationRow();
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n =
@@ -317,6 +320,7 @@ class _NotationRow extends StatelessWidget {
 }
 
 class _PrecisionModeRow extends StatelessWidget {
+  const _PrecisionModeRow();
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n =
@@ -345,6 +349,7 @@ class _PrecisionModeRow extends StatelessWidget {
 }
 
 class _PrecisionRow extends StatelessWidget {
+  const _PrecisionRow();
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n =
@@ -367,6 +372,7 @@ class _PrecisionRow extends StatelessWidget {
 }
 
 class _FractionRow extends StatelessWidget {
+  const _FractionRow();
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n =
@@ -399,6 +405,7 @@ class _FractionRow extends StatelessWidget {
 }
 
 class _GroupingRow extends StatelessWidget {
+  const _GroupingRow();
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n =

@@ -69,7 +69,7 @@ class FunctionTabs extends StatelessWidget {
 ///
 /// 同时被 [FunctionTabs]（函数页签）与 `ƒ` 键弹出的 [FunctionSheet] 复用（UI-07）。
 class ScientificFunctionGrid extends StatelessWidget {
-  const ScientificFunctionGrid();
+  const ScientificFunctionGrid({super.key});
 
   static const List<(String, String)> _fns = <(String, String)>[
     ('sin', 'sin('),

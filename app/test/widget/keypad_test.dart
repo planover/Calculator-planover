@@ -20,6 +20,7 @@ import 'package:calculator_planover/src/state/region_format_controller.dart';
 import 'package:calculator_planover/src/state/settings_controller.dart';
 import 'package:calculator_planover/src/storage/memory_history_repository.dart';
 import 'package:calculator_planover/src/storage/settings_store.dart';
+import 'package:calculator_planover/src/ui/widgets/key_button.dart';
 import 'package:calculator_planover/src/ui/widgets/keypad.dart';
 
 Widget _harness(CalculatorController calc, LocaleController locale,
@@ -31,7 +32,7 @@ Widget _harness(CalculatorController calc, LocaleController locale,
       ChangeNotifierProvider<RegionFormatController>.value(value: region),
       ChangeNotifierProvider<HistoryController>.value(value: history),
     ],
-    child: MaterialApp(
+    child: const MaterialApp(
       home: Scaffold(
         body: SizedBox(height: 480, child: Keypad()),
       ),

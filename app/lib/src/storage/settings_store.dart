@@ -14,7 +14,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/eval_settings.dart';
 import '../models/submit_mode.dart';
-import '../theme/app_theme.dart';
 
 /// 主题模式（与 Flutter `ThemeMode` 同构，但不引入 material 依赖）。
 ///
