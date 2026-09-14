@@ -32,13 +32,18 @@ import 'history_controller.dart';
 /// 计算器主控制器。
 class CalculatorController extends ChangeNotifier {
   /// 装配：引擎 + 设置控制器 + 历史控制器。
+  ///
+  /// [normalizeInput] 可注入：把用户输入中的**区域小数分隔符**规范化成引擎内部
+  /// 语法 `.`（LC-09 / A4）。为 null 时不做规范化（测试/无区域场景）。
   CalculatorController({
     required EngineGateway engine,
     required SettingsController settings,
     required HistoryController history,
+    String Function(String expr)? normalizeInput,
   })  : _engine = engine,
         _settings = settings,
-        _history = history {
+        _history = history,
+        _normalizeInput = normalizeInput {
     _settings.addListener(_onSettingsChanged);
     // 把已载入的设置下发引擎（角度/位宽），并做首次预览。
     _pushSettingsToEngine();
@@ -49,6 +54,9 @@ class CalculatorController extends ChangeNotifier {
   final EngineGateway _engine;
   final SettingsController _settings;
   final HistoryController _history;
+
+  /// 输入规范化回调（LC-09）：区域 `,` → 引擎内部 `.`。
+  final String Function(String expr)? _normalizeInput;
 
   final Debouncer _debouncer = Debouncer();
 
@@ -115,7 +123,7 @@ class CalculatorController extends ChangeNotifier {
   ///
   /// 立即更新文本让输入跟手，再经防抖触发预览求值。
   void onExpressionChanged(String text, TextSelection selection) {
-    _text = text;
+    _text = _applyNormalize(text);
     _selection = selection;
     _markEdited();
     notifyListeners();
@@ -124,11 +132,22 @@ class CalculatorController extends ChangeNotifier {
 
   /// 用一段新表达式整体替换（如从历史载入）。
   void setText(String text) {
-    _text = text;
-    _selection = TextSelection.collapsed(offset: text.length);
+    _text = _applyNormalize(text);
+    _selection = TextSelection.collapsed(offset: _text.length);
     _markEdited();
     notifyListeners();
     _debouncer.call(_recomputePreview);
+  }
+
+  /// 把用户输入的区域小数分隔符规范化成引擎内部 `.`（LC-09 / A4）。
+  ///
+  /// 未注入规范化器时原样返回（Dart 侧不做任何语法改写，保持"编辑逻辑归 Rust"）。
+  String _applyNormalize(String text) {
+    final String Function(String)? f = _normalizeInput;
+    if (f == null) {
+      return text;
+    }
+    return f(text);
   }
 
   /// 走引擎的纯函数编辑（插入 / 退格 / 删除，含括号配对）。

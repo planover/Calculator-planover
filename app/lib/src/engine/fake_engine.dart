@@ -20,6 +20,7 @@ import '../models/eval_result.dart';
 import '../models/eval_settings.dart';
 import '../models/memory_state.dart';
 import '../models/number_value.dart';
+import '../models/region_format_request.dart';
 import '../models/unit_info.dart';
 import '../models/variable_info.dart';
 import 'engine_gateway.dart';
@@ -258,4 +259,43 @@ class FakeEngine implements EngineGateway {
 
   @override
   MemoryState memoryRecall() => _memState();
+
+  /// 区域格式替身：只记录最新请求，不做任何数值/货币格式化（数值语义归 Rust）。
+  @override
+  bool setRegionFormat(RegionFormatRequest region) {
+    lastRegionFormat = region;
+    regionFormatApplied = true;
+    return true;
+  }
+
+  /// 货币格式化替身：不做货币渲染，原样回显 + 括号负数形态（测试断言调用即可）。
+  @override
+  CurrencyDisplay formatCurrency({
+    required String value,
+    CurrencyFormatConfig? currency,
+  }) {
+    final String symbol = currency?.symbol ?? '';
+    return CurrencyDisplay(
+      display: '$symbol$value',
+      negativeDisplay: '($symbol$value)',
+    );
+  }
+
+  /// 规范化替身：仅把配置的小数分隔符换成引擎内部 `.`（纯文本替换，不算数值运算）。
+  @override
+  String normalizeExpression({
+    required String expr,
+    String? decimalSeparator,
+  }) {
+    if (decimalSeparator == null || decimalSeparator.isEmpty || decimalSeparator == '.') {
+      return expr;
+    }
+    return expr.replaceAll(decimalSeparator, '.');
+  }
+
+  /// 最近一次 `setRegionFormat` 收到的请求（供测试断言）。
+  RegionFormatRequest? lastRegionFormat;
+
+  /// 是否调用过 `setRegionFormat`。
+  bool regionFormatApplied = false;
 }

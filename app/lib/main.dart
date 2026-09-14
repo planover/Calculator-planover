@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'src/engine/native_engine.dart';
 import 'src/engine/fake_engine.dart';
 import 'src/engine/engine_gateway.dart';
+import 'src/models/region_format_request.dart';
 import 'src/state/calculator_controller.dart';
 import 'src/state/history_controller.dart';
 import 'src/state/locale_controller.dart';
@@ -39,21 +40,52 @@ void main() async {
   final SettingsStore store = SharedPreferencesSettingsStore();
   final SettingsController settings = SettingsController(store: store);
   final LocaleController locale = LocaleController(store: store);
-  final RegionFormatController region =
-      RegionFormatController(store: SharedPreferencesRegionFormatStore());
-  await settings.load();
-  await locale.load();
-  await region.load();
 
   final HistoryController history = HistoryController(SqfliteHistoryRepository());
   await history.load();
 
   // 引擎初始化失败时退回 FakeEngine 占位，保证 UI 仍能装配（错误页叠加显示）。
   final EngineGateway activeEngine = engine ?? FakeEngine();
+
+  // 区域格式 → 引擎：把 Dart 侧镜像的数字/货币配置经 `set_region_format` 下发（A1）。
+  // 回调捕获 `activeEngine`；启动时若引擎不可用，activeEngine 为 FakeEngine（无害替身）。
+  final RegionFormatController region = RegionFormatController(
+    store: SharedPreferencesRegionFormatStore(),
+    onRegionFormatChanged: (RegionFormatRequest request) {
+      try {
+        activeEngine.setRegionFormat(request);
+      } catch (e) {
+        // 引擎下发失败不应阻断 UI（如引擎未就绪）；记录即可。
+        debugPrint('区域格式下发引擎失败：$e');
+      }
+    },
+  );
+
+  await settings.load();
+  await locale.load();
+  await region.load();
+
   final CalculatorController calc = CalculatorController(
     engine: activeEngine,
     settings: settings,
     history: history,
+    // LC-09 / A4：把区域小数分隔符（如 de-DE 的 `,`）规范化为引擎内部 `.`。
+    // 仅在区域用非 `.` 分隔符时介入；用 Rust `normalize_expression` 保证与引擎一致。
+    normalizeInput: (String expr) {
+      final String? sep = region.decimalSeparator;
+      if (sep == null || sep == '.') {
+        return expr;
+      }
+      try {
+        return activeEngine.normalizeExpression(
+          expr: expr,
+          decimalSeparator: sep,
+        );
+      } catch (e) {
+        debugPrint('表达式规范化失败：$e');
+        return expr;
+      }
+    },
   );
 
   runApp(MyApp(

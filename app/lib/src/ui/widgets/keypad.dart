@@ -35,11 +35,13 @@ class Keypad extends StatelessWidget {
         Provider.of<CalculatorController>(context, listen: false);
     final AppLocalizations l10n =
         Provider.of<LocaleController>(context, listen: false).l10n;
-    final RegionFormatController region =
-        Provider.of<RegionFormatController>(context, listen: false);
+    // 区域格式可选注入：测试/预览未提供时回落语言 CLDR（LC-09）。
+    final RegionFormatController? region =
+        Provider.of<RegionFormatController?>(context, listen: false);
     // 小数点键面：优先区域格式决定的符号，否则回落语言 CLDR（LC-09）。
     // 内部始终插入规范语法 `.`，由表达式渲染层负责反向映射（如需）。
-    final String decimal = region.decimalSeparator ?? l10n.decimalSeparator;
+    final String decimal =
+        region?.decimalSeparator ?? l10n.decimalSeparator;
 
     final List<List<Widget>> rows = <List<Widget>>[
       <Widget>[

@@ -1,0 +1,133 @@
+{
+  "ui": {
+    "common": {
+      "ok": "確定",
+      "cancel": "取消",
+      "clear": "清除",
+      "delete": "刪除",
+      "copy": "複製",
+      "close": "關閉",
+      "done": "完成",
+      "back": "返回"
+    },
+    "app": {
+      "title": "計算機"
+    },
+    "settings": {
+      "title": "設定",
+      "language": "語言",
+      "languageAuto": "跟隨系統",
+      "theme": "主題",
+      "themeSystem": "跟隨系統",
+      "themeLight": "淺色",
+      "themeDark": "深色",
+      "themeDarkAmoled": "深色 AMOLED",
+      "themeMetroBlue": "Metro 藍",
+      "themeMetroGreen": "Metro 綠",
+      "themeMetroPurple": "Metro 紫",
+      "themeOldGray": "老灰",
+      "themeViolet": "紫羅蘭",
+      "themeBlue": "藍色",
+      "themeHighContrast": "高對比",
+      "themeNord": "Nord",
+      "themeDracula": "Dracula",
+      "themeOneDark": "One Dark",
+      "themeSolarizedLight": "Solarized 淺色",
+      "themeSolarizedDark": "Solarized 深色",
+      "themeGruvboxDark": "Gruvbox 深色",
+      "themeMonokai": "Monokai",
+      "region": "區域格式",
+      "regionAuto": "跟隨系統區域",
+      "regionSyncLanguage": "與語言區域一致",
+      "submitMode": "提交方式",
+      "submitAuto": "自動（邊輸入邊計算）",
+      "submitManual": "手動（按 =）",
+      "angleMode": "角度",
+      "notation": "記數法",
+      "notationAuto": "自動",
+      "notationFixed": "定點",
+      "notationScientific": "科學記數",
+      "notationEngineering": "工程記數",
+      "precision": "精度",
+      "fraction": "分數",
+      "grouping": "數字分組",
+      "history": "歷史記錄",
+      "clearHistory": "清除歷史",
+      "about": "關於",
+      "appearance": "外觀",
+      "calculation": "計算",
+      "displayFormat": "顯示格式",
+      "engine": "計算引擎",
+      "fractionImproper": "假分數",
+      "fractionMixed": "帶分數",
+      "fractionOff": "關",
+      "negPowNote": "-3^2 = -9（一元負號優先級低於冪運算）",
+      "precisionDecimalPlaces": "小數位數",
+      "precisionMode": "精度模式",
+      "precisionSignificant": "有效數字",
+      "version": "版本",
+      "wordSize": "位寬"
+    },
+    "keypad": {
+      "equal": "=",
+      "clear": "C",
+      "ans": "ans",
+      "backspace": "⌫",
+      "closeParen": ")",
+      "decimal": ".",
+      "divide": "÷",
+      "minus": "−",
+      "multiply": "×",
+      "negate": "±",
+      "openParen": "(",
+      "plus": "+",
+      "power": "^",
+      "sqrt": "√",
+      "cursorLeft": "←",
+      "cursorRight": "→",
+      "percent": "%",
+      "openCloseParen": "( )",
+      "memory": "記憶",
+      "pi": "π",
+      "science": "函數",
+      "history": "歷史"
+    },
+    "history": {
+      "empty": "暫無歷史記錄",
+      "clearConfirm": "確定要清除全部歷史嗎？",
+      "title": "歷史記錄"
+    },
+    "error": {
+      "title": "錯誤"
+    },
+    "unitConverter": {
+      "title": "單位換算",
+      "open": "開啟單位換算",
+      "placeholder": "輸入數值",
+      "swap": "交換"
+    },
+    "tabs": {
+      "constants": "常數",
+      "functions": "函數",
+      "units": "單位",
+      "variables": "變數"
+    },
+    "memory": {
+      "title": "記憶暫存器",
+      "empty": "記憶為空",
+      "add": "M+",
+      "subtract": "M−",
+      "clear": "MC",
+      "recall": "MR"
+    },
+    "help": {
+      "ansVsMemoryTitle": "記憶暫存器（M）與 Ans 的區別",
+      "ansVsMemoryBody": "Ans 保存上一次計算結果，每次求值都會被覆蓋。記憶暫存器 M 是獨立的儲存，透過 M+/M− 累加、MR 回插；它獨立於 Ans，且清除歷史時不會被清零。",
+      "complexTitle": "複數",
+      "complexBody": "本版本不支援複數。涉及 i 或複數運算的運算式將回傳錯誤。"
+    }
+  },
+  "errors": {},
+  "units": {},
+  "constants": {}
+}

@@ -9,10 +9,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../l10n/region_format_presets.dart';
 import '../../models/history_entry.dart';
+import '../../models/region_format_config.dart';
 import '../../state/calculator_controller.dart';
 import '../../state/history_controller.dart';
 import '../../state/locale_controller.dart';
+import '../../state/region_format_controller.dart';
 import '../../theme/tokens.dart';
 import '../../utils/date_format.dart';
 
@@ -37,6 +40,10 @@ class _HistorySheetBody extends StatelessWidget {
         Provider.of<LocaleController>(context, listen: true).l10n;
     final HistoryController history =
         Provider.of<HistoryController>(context, listen: true);
+    // 区域格式决定历史时间/日期（RF-T-06 / RF-D-07），与界面语言无关（A3）。
+    // 用可选查找：未注入 RegionFormatController 的测试/预览场景回落默认预设，
+    // 不因缺 Provider 而崩（既有 history_marker_test 未注入该 Provider）。
+    final RegionFormatConfig regionConfig = _regionConfig(context);
 
     return DraggableScrollableSheet(
       initialChildSize: 0.7,
@@ -44,6 +51,9 @@ class _HistorySheetBody extends StatelessWidget {
       minChildSize: 0.4,
       expand: false,
       builder: (BuildContext ctx, ScrollController scroll) {
+        final List<HistoryEntry> entries = history.entries;
+        // 按短日期分组（RF-D-07）：同一天的条目归为一组，首条前插入日期头。
+        final List<_HistoryRow> rows = _buildRows(entries, regionConfig);
         return Column(
           children: <Widget>[
             Padding(
@@ -86,17 +96,23 @@ class _HistorySheetBody extends StatelessWidget {
             ),
             const Divider(height: 1),
             Expanded(
-              child: history.entries.isEmpty
+              child: entries.isEmpty
                   ? Center(
                       child: Text(l10n.tr('ui.history.empty')),
                     )
-                  : ListView.separated(
+                  : ListView.builder(
                       controller: scroll,
-                      itemCount: history.entries.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemCount: rows.length,
                       itemBuilder: (BuildContext c, int i) {
-                        final HistoryEntry e = history.entries[i];
-                        return _HistoryTile(entry: e);
+                        final _HistoryRow row = rows[i];
+                        final String? header = row.header;
+                        if (header != null) {
+                          return _DateHeader(label: header);
+                        }
+                        return _HistoryTile(
+                          entry: row.entry!,
+                          regionConfig: regionConfig,
+                        );
                       },
                     ),
             ),
@@ -107,10 +123,82 @@ class _HistorySheetBody extends StatelessWidget {
   }
 }
 
+/// 解析当前区域时间/日期配置；未注入 [RegionFormatController] 时回落默认预设。
+///
+/// 用可空的 `Provider.of<RegionFormatController?>`（`listen: false`）实现"可选依赖"：
+/// 既有测试只注入 3 个 Provider，此处不能因缺 Provider 而崩。
+RegionFormatConfig _regionConfig(BuildContext context) {
+  final RegionFormatController? region =
+      Provider.of<RegionFormatController?>(context, listen: true);
+  return region?.config ?? RegionFormatPresets.resolve(null);
+}
+
+/// 历史列表的一行：要么是日期分组头，要么是一条记录。
+class _HistoryRow {
+  /// 日期分组头（`null` 表示这是记录行）。
+  const _HistoryRow.header(this.header) : entry = null;
+
+  /// 记录行。
+  const _HistoryRow.entry(this.entry) : header = null;
+
+  /// 分组头文案；非 null 时 [entry] 为 null。
+  final String? header;
+
+  /// 记录；非 null 时 [header] 为 null。
+  final HistoryEntry? entry;
+}
+
+/// 按短日期分组构造渲染行（RF-D-07）。
+List<_HistoryRow> _buildRows(
+  List<HistoryEntry> entries,
+  RegionFormatConfig config,
+) {
+  final List<_HistoryRow> rows = <_HistoryRow>[];
+  String lastKey = '';
+  for (final HistoryEntry e in entries) {
+    if (e.ts > 0) {
+      final DateTime dt = DateTime.fromMillisecondsSinceEpoch(e.ts);
+      final String key = regionDateGroupKey(dt);
+      if (key != lastKey) {
+        lastKey = key;
+        rows.add(_HistoryRow.header(formatRegionDate(dt, config)));
+      }
+    }
+    rows.add(_HistoryRow.entry(e));
+  }
+  return rows;
+}
+
+/// 日期分组头。
+class _DateHeader extends StatelessWidget {
+  const _DateHeader({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        Tokens.padMd,
+        Tokens.padSm,
+        Tokens.padMd,
+        Tokens.padSm / 2,
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+            ),
+      ),
+    );
+  }
+}
+
 class _HistoryTile extends StatelessWidget {
-  const _HistoryTile({required this.entry});
+  const _HistoryTile({required this.entry, required this.regionConfig});
 
   final HistoryEntry entry;
+  final RegionFormatConfig regionConfig;
 
   @override
   Widget build(BuildContext context) {
@@ -153,7 +241,7 @@ class _HistoryTile extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
           Text(
-            formatTimestamp(entry.ts),
+            formatRegionTimestamp(entry.ts, regionConfig),
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],

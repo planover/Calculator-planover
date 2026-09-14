@@ -26,6 +26,7 @@ import '../models/engine_error.dart';
 import '../models/eval_result.dart';
 import '../models/eval_settings.dart';
 import '../models/memory_state.dart';
+import '../models/region_format_request.dart';
 import '../models/unit_info.dart';
 import '../models/variable_info.dart';
 import '../utils/json_helpers.dart';
@@ -307,5 +308,45 @@ class NativeEngine implements EngineGateway {
   MemoryState memoryRecall() {
     final Map<String, dynamic> data = _invoke(_bindings.memoryRecall);
     return MemoryState.fromJson(data);
+  }
+
+  @override
+  bool setRegionFormat(RegionFormatRequest region) {
+    final Map<String, dynamic> data = _invoke(
+      _bindings.setRegionFormat,
+      payload: jsonEncode(region.toJson()),
+    );
+    return readBool(data, 'applied', false);
+  }
+
+  @override
+  CurrencyDisplay formatCurrency({
+    required String value,
+    CurrencyFormatConfig? currency,
+  }) {
+    final Map<String, dynamic> data = _invoke(
+      _bindings.formatCurrency,
+      payload: _payload(<String, Object?>{
+        'value': value,
+        'currency': currency?.toJson(),
+      }),
+    );
+    return CurrencyDisplay.fromJson(data);
+  }
+
+  @override
+  String normalizeExpression({
+    required String expr,
+    String? decimalSeparator,
+  }) {
+    final Map<String, dynamic> data = _invoke(
+      _bindings.normalizeExpression,
+      payload: _payload(<String, Object?>{
+        'expr': expr,
+        'decimal_separator': decimalSeparator,
+      }),
+    );
+    // 引擎成功时返回 {"expr": "..."}；缺失时回落原串（不崩）。
+    return readString(data, 'expr', expr);
   }
 }

@@ -14,6 +14,7 @@ import '../models/convert_result.dart';
 import '../models/eval_result.dart';
 import '../models/eval_settings.dart';
 import '../models/memory_state.dart';
+import '../models/region_format_request.dart';
 import '../models/unit_info.dart';
 import '../models/variable_info.dart';
 
@@ -97,4 +98,49 @@ abstract class EngineGateway {
 
   /// 记忆寄存器 `MR`：返回当前记忆状态（[MemoryState.text] 为可回插到表达式的字面量）。
   MemoryState memoryRecall();
+
+  /// 设置区域格式（数字/货币规则；RF-N/RF-C，架构 A1）。
+  ///
+  /// [region] 为 `set_region_format` 的请求负载（`docs/ARCHITECTURE-INCREMENT-v2.md` §3.1）。
+  /// 返回 `true` 表示引擎已应用。**时间/日期不走本方法**（A2：Dart 侧负责）。
+  bool setRegionFormat(RegionFormatRequest region);
+
+  /// 按货币配置格式化一个数值串（RF-C-*, `format_currency`）。
+  ///
+  /// [value] 为**规范数值串**（小数点为 `.`）；[currency] 可覆盖 session 中的货币配置。
+  /// 返回 `display` / `negativeDisplay`（负值形态），由调用方决定用哪个。
+  CurrencyDisplay formatCurrency({
+    required String value,
+    CurrencyFormatConfig? currency,
+  });
+
+  /// 把区域小数分隔符**规范化**为引擎内部语法 `.`（LC-09 / A4，`normalize_expression`）。
+  ///
+  /// [decimalSeparator] 缺省时由引擎按 session 区域格式推断。
+  String normalizeExpression({
+    required String expr,
+    String? decimalSeparator,
+  });
+}
+
+/// `format_currency` 的展示结果（`{"display","negative_display"}`）。
+class CurrencyDisplay {
+  /// 构造。
+  const CurrencyDisplay({required this.display, required this.negativeDisplay});
+
+  /// 正数展示串（如 `¥3.50`）。
+  final String display;
+
+  /// 负数展示串（如 `(¥3.50)`）。
+  final String negativeDisplay;
+
+  /// 宽容解析（缺字段回落空串）。
+  factory CurrencyDisplay.fromJson(Map<String, dynamic> json) {
+    final Object? d = json['display'];
+    final Object? n = json['negative_display'];
+    return CurrencyDisplay(
+      display: d is String ? d : '',
+      negativeDisplay: n is String ? n : '',
+    );
+  }
 }

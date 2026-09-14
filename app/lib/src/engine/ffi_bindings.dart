@@ -133,7 +133,27 @@ typedef MemoryRecallNative = Pointer<Utf8> Function(Pointer<Utf8>);
 /// Dart 侧：`calc_memory_recall`。
 typedef MemoryRecallDart = Pointer<Utf8> Function(Pointer<Utf8>);
 
-// ── 19. calc_string_free：返回 void ────────────────────────────
+// ── 19~21. 区域格式导出（PRD §6 RF-N/RF-C / LC-09，Rust 侧 commit feab864）──
+
+/// C 侧：`calc_set_region_format`。
+typedef SetRegionFormatNative = Pointer<Utf8> Function(Pointer<Utf8>);
+
+/// Dart 侧：`calc_set_region_format`。
+typedef SetRegionFormatDart = Pointer<Utf8> Function(Pointer<Utf8>);
+
+/// C 侧：`calc_format_currency`。
+typedef FormatCurrencyNative = Pointer<Utf8> Function(Pointer<Utf8>);
+
+/// Dart 侧：`calc_format_currency`。
+typedef FormatCurrencyDart = Pointer<Utf8> Function(Pointer<Utf8>);
+
+/// C 侧：`calc_normalize_expression`。
+typedef NormalizeExpressionNative = Pointer<Utf8> Function(Pointer<Utf8>);
+
+/// Dart 侧：`calc_normalize_expression`。
+typedef NormalizeExpressionDart = Pointer<Utf8> Function(Pointer<Utf8>);
+
+// ── 22. calc_string_free：返回 void ────────────────────────────
 /// C 侧：`calc_string_free(*mut c_char)`，**返回 void**。
 typedef FreeNative = Void Function(Pointer<Utf8>);
 
@@ -257,6 +277,24 @@ class FfiBindings {
           'calc_memory_recall');
 
   // 19
+  /// `calc_set_region_format`：设置区域格式（数字/货币）。
+  late final SetRegionFormatDart setRegionFormat = _lib
+      .lookupFunction<SetRegionFormatNative, SetRegionFormatDart>(
+          'calc_set_region_format');
+
+  // 20
+  /// `calc_format_currency`：按货币配置格式化数值。
+  late final FormatCurrencyDart formatCurrency = _lib
+      .lookupFunction<FormatCurrencyNative, FormatCurrencyDart>(
+          'calc_format_currency');
+
+  // 21
+  /// `calc_normalize_expression`：区域分隔符 → 引擎内部 `.`（LC-09）。
+  late final NormalizeExpressionDart normalizeExpression = _lib
+      .lookupFunction<NormalizeExpressionNative, NormalizeExpressionDart>(
+          'calc_normalize_expression');
+
+  // 22
   /// `calc_string_free`：释放 Rust 分配的字符串。
   late final FreeDart free =
       _lib.lookupFunction<FreeNative, FreeDart>('calc_string_free');
