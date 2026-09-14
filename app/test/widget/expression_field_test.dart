@@ -107,12 +107,12 @@ void main() {
 
     await tester.pumpWidget(_harness(calc, locale));
 
-    await tester.tap(find.bySemanticsLabel('ui.keypad.openParen'));
+    await tester.tap(find.bySemanticsLabel('ui.keypad.openCloseParen'));
     await tester.pumpAndSettle();
     expect(calc.text, '(');
     expect(calc.selection.baseOffset, 1);
 
-    await tester.tap(find.bySemanticsLabel('ui.keypad.closeParen'));
+    await tester.tap(find.bySemanticsLabel('ui.keypad.openCloseParen'));
     await tester.pumpAndSettle();
     expect(calc.text, '()');
 
