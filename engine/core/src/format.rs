@@ -139,12 +139,240 @@ pub const MIN_PRECISION: u8 = 1;
 /// 分数显示允许的最大分母；超过则回退小数（避免 `0.333333` 显示成 `333333/1000000`）。
 pub const MAX_FRACTION_DEN: i64 = 10_000;
 
+// ── 区域格式（A1：RF-N/RF-C，PRD-INCREMENT-v2 §6）───────────────────────────
+//
+// 契约见 `docs/ARCHITECTURE-INCREMENT-v2.md` §3.1：全部字段 `Option`，
+// 缺省 = 现状行为（`.` 小数点 / `,` 千分位 / `3;0` / 显示前导零 / `-1.1`），
+// 因此不传 `RegionFormatConfig` 时既有 238 个测试逐字节不变。
+
+/// 分组方式（RF-N-04）：标准 `3;0`（123,456,789）或印度式 `3;2;0`（12,34,56,789）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+pub enum GroupPattern {
+    /// `3;0` —— 每三位一组。
+    #[serde(rename = "3;0")]
+    Standard,
+    /// `3;2;0` —— 印度式：末组三位、其余每两位一组。
+    #[serde(rename = "3;2;0")]
+    Indian,
+}
+
+impl Default for GroupPattern {
+    fn default() -> Self {
+        GroupPattern::Standard
+    }
+}
+
+/// 负数格式 5 种（RF-N-06，对齐 Win11「负数格式」）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NegativeNumberFormat {
+    /// `-1.1`（现状默认）。
+    #[default]
+    MinusPlain,
+    /// `- 1.1`。
+    MinusSpace,
+    /// `(1.1)`。
+    MinusParen,
+    /// `1.1-`。
+    TrailingMinus,
+    /// `1.1 -`。
+    TrailingMinusSpace,
+}
+
+/// 货币符号相对金额的位置 4 种（RF-C-02）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CurrencyPositiveFormat {
+    /// `$1.1`。
+    #[default]
+    Before,
+    /// `1.1$`。
+    After,
+    /// `$ 1.1`。
+    BeforeSpace,
+    /// `1.1 $`。
+    AfterSpace,
+}
+
+/// 货币负数符号位 4 种（RF-C-03 的"符号"维度）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CurrencyNegativeSign {
+    /// `($1.1)`。
+    #[default]
+    Paren,
+    /// `-$1.1`。
+    Before,
+    /// `- $1.1`。
+    BeforeSpace,
+    /// `$1.1-`。
+    Trailing,
+}
+
+/// 货币负数格式 = 符号位(4) × 货币位置(4) = **16 种**（RF-C-03）。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+pub struct CurrencyNegativeFormat {
+    /// 负号/括号的位置。
+    #[serde(default)]
+    pub sign: CurrencyNegativeSign,
+    /// 货币符号相对金额的位置。
+    #[serde(default)]
+    pub symbol: CurrencyPositiveFormat,
+}
+
+/// 货币格式配置（RF-C-01~07）；全部可选 → 缺省沿用各自默认。
+#[derive(Debug, Clone, Default, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct CurrencyFormatConfig {
+    /// 货币符号或 ISO 4217 代码（RF-C-01），默认 `¥`。
+    #[serde(default)]
+    pub symbol: Option<String>,
+    /// 正数格式（RF-C-02），默认 `before`。
+    #[serde(default)]
+    pub positive_format: Option<CurrencyPositiveFormat>,
+    /// 负数格式（RF-C-03），默认 `{sign: paren, symbol: before}`。
+    #[serde(default)]
+    pub negative_format: Option<CurrencyNegativeFormat>,
+    /// 货币小数分隔符（RF-C-04），独立于普通小数分隔符。
+    #[serde(default)]
+    pub decimal_separator: Option<String>,
+    /// 货币小数位数 0~9（RF-C-05，如 JPY=0、CNY=2），默认 2。
+    #[serde(default)]
+    pub decimal_digits: Option<u8>,
+    /// 货币千分位（RF-C-06），独立于普通千分位。
+    #[serde(default)]
+    pub group_separator: Option<String>,
+    /// 货币分组方式（RF-C-06）。
+    #[serde(default)]
+    pub group_pattern: Option<GroupPattern>,
+}
+
+/// 区域格式配置（A1）。
+///
+/// **全部字段 `Option`**：缺省 = 现状行为（`RegionStyle::default()`），
+/// 保证 `format_number` / `evaluate_*` 既有行为逐字节一致（架构 §3.4）。
+#[derive(Debug, Clone, Default, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct RegionFormatConfig {
+    /// 小数分隔符（RF-N-01）：`.` / `,` / `٫` / 空格 / 自定义 1 字符。
+    #[serde(default)]
+    pub decimal_separator: Option<String>,
+    /// 千分位分组符（RF-N-03）：`,` / `.` / `'` / 空格 / `٬` / 自定义；空串 = 不分组。
+    #[serde(default)]
+    pub group_separator: Option<String>,
+    /// 分组方式（RF-N-04）：`3;0` / `3;2;0`。
+    #[serde(default)]
+    pub group_pattern: Option<GroupPattern>,
+    /// 显示前导零（RF-N-07）：false 时 `0.5` 显示为 `.5`。
+    #[serde(default)]
+    pub leading_zero: Option<bool>,
+    /// 负数格式（RF-N-06）5 选 1。
+    #[serde(default)]
+    pub negative_format: Option<NegativeNumberFormat>,
+    /// 列表分隔符（RF-N-09，P2）。
+    #[serde(default)]
+    pub list_separator: Option<String>,
+    /// 货币格式（RF-C-01~07）。
+    #[serde(default)]
+    pub currency: Option<CurrencyFormatConfig>,
+}
+
+impl RegionFormatConfig {
+    /// 校验：分隔符长度 ≤ 1、货币小数位 0~9。非法返回 `InvalidSettings`。
+    pub fn validate(&self) -> Result<()> {
+        let check = |name: &str, v: &Option<String>| -> Result<()> {
+            if let Some(s) = v {
+                if s.chars().count() > 1 {
+                    return Err(EngineError::with_message(
+                        ErrorKind::InvalidSettings,
+                        format!("非法区域格式：{} 长度必须 ≤ 1 字符", name),
+                    ));
+                }
+            }
+            Ok(())
+        };
+        check("decimal_separator", &self.decimal_separator)?;
+        check("group_separator", &self.group_separator)?;
+        check("list_separator", &self.list_separator)?;
+        if let Some(c) = &self.currency {
+            check("currency.decimal_separator", &c.decimal_separator)?;
+            check("currency.group_separator", &c.group_separator)?;
+            if let Some(d) = c.decimal_digits {
+                if d > 9 {
+                    return Err(EngineError::with_message(
+                        ErrorKind::InvalidSettings,
+                        format!("非法区域格式：currency.decimal_digits 必须介于 0~9，实得 {}", d),
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// 解析为完整渲染风格；`grouping` 来自 `NumberFormatSettings.grouping`。
+    pub fn resolve_with(&self, grouping: bool) -> RegionStyle {
+        RegionStyle {
+            grouping,
+            decimal_separator: self
+                .decimal_separator
+                .clone()
+                .unwrap_or_else(|| ".".to_string()),
+            group_separator: self
+                .group_separator
+                .clone()
+                .unwrap_or_else(|| ",".to_string()),
+            group_pattern: self.group_pattern.unwrap_or(GroupPattern::Standard),
+            leading_zero: self.leading_zero.unwrap_or(true),
+            negative_format: self.negative_format.unwrap_or_default(),
+        }
+    }
+}
+
+/// 解析后的区域渲染风格（`None` 已落默认值）。
+#[derive(Debug, Clone, PartialEq)]
+pub struct RegionStyle {
+    /// 是否启用千分位分组（继承自 `NumberFormatSettings.grouping`）。
+    pub grouping: bool,
+    /// 小数分隔符。
+    pub decimal_separator: String,
+    /// 千分位分组符；空串 = 不分组。
+    pub group_separator: String,
+    /// 分组方式。
+    pub group_pattern: GroupPattern,
+    /// 显示前导零。
+    pub leading_zero: bool,
+    /// 负数格式。
+    pub negative_format: NegativeNumberFormat,
+}
+
+impl Default for RegionStyle {
+    /// 与基线行为逐字节一致的默认：`.` / `,` / `3;0` / 前导零 / `-1.1`。
+    fn default() -> Self {
+        Self {
+            grouping: true,
+            decimal_separator: ".".to_string(),
+            group_separator: ",".to_string(),
+            group_pattern: GroupPattern::Standard,
+            leading_zero: true,
+            negative_format: NegativeNumberFormat::MinusPlain,
+        }
+    }
+}
+
 /// 校验设置；`precision` 越界返回 `InvalidSettings`。
+///
+/// 小数位模式下 `0` 合法（RF-N-02：小数位数取值 0~9，`0` 表示取整）；
+/// 有效位模式下仍要求 `1~=15`（0 位有效数字无意义）。
 pub fn validate(s: &NumberFormatSettings) -> Result<()> {
-    if s.precision < MIN_PRECISION || s.precision > MAX_PRECISION {
+    let lo = match s.precision_mode {
+        PrecisionMode::DecimalPlaces => 0,
+        PrecisionMode::Significant => MIN_PRECISION,
+    };
+    if s.precision < lo || s.precision > MAX_PRECISION {
         return Err(EngineError::with_message(
             ErrorKind::InvalidSettings,
-            format!("精度必须介于 {}~{}，实得 {}", MIN_PRECISION, MAX_PRECISION, s.precision),
+            format!(
+                "精度必须介于 {}~{}，实得 {}",
+                lo, MAX_PRECISION, s.precision
+            ),
         ));
     }
     Ok(())
@@ -186,36 +414,109 @@ fn trim_zeros(s: &str) -> String {
     out
 }
 
-/// 千位分隔（入参为**纯数字**整数部分，不含符号）。
-pub fn group_digits(int_part: &str) -> String {
+/// 千位分隔（自定义分隔符与分组方式；入参为**纯数字**整数部分，不含符号）。
+///
+/// `sep` 为空串时不分组。印度式（`3;2;0`）末组三位、其余每两位一组。
+pub fn group_digits_with(int_part: &str, sep: &str, pattern: GroupPattern) -> String {
     let digits: String = int_part.chars().filter(|c| c.is_ascii_digit()).collect();
-    if digits.len() <= 3 {
+    if digits.len() <= 3 || sep.is_empty() {
         return digits;
     }
-    let mut out = String::new();
     let n = digits.len();
-    for (i, c) in digits.chars().enumerate() {
-        let from_right = n - i;
-        if i > 0 && from_right % 3 == 0 {
-            out.push(',');
+    let mut out = String::new();
+    match pattern {
+        GroupPattern::Standard => {
+            for (i, c) in digits.chars().enumerate() {
+                let from_right = n - i;
+                if i > 0 && from_right % 3 == 0 {
+                    out.push_str(sep);
+                }
+                out.push(c);
+            }
         }
-        out.push(c);
+        GroupPattern::Indian => {
+            // 123456789 → 12,34,56,789：末组 3 位，之前每 2 位一组。
+            let head = n - 3;
+            for (i, c) in digits.chars().enumerate() {
+                if i > 0 {
+                    let need_sep = if i < head {
+                        (head - i) % 2 == 0
+                    } else {
+                        i == head
+                    };
+                    if need_sep {
+                        out.push_str(sep);
+                    }
+                }
+                out.push(c);
+            }
+        }
     }
     out
 }
 
-/// 对可能带负号与小数部分的数字串做千位分隔。
-fn apply_group(s: &str, group: bool) -> String {
-    if !group {
-        return s.to_string();
-    }
+/// 千位分隔（默认 `,` + `3;0`；保留旧签名供既有调用与测试使用）。
+pub fn group_digits(int_part: &str) -> String {
+    group_digits_with(int_part, ",", GroupPattern::Standard)
+}
+
+/// 对可能带负号与小数部分的数字串应用区域风格：
+/// 千分位分组（自定义分隔符/方式）+ 小数分隔符替换 + 前导零开关（RF-N-01/03/04/07）。
+fn apply_group_styled(s: &str, st: &RegionStyle) -> String {
     let (sign, body) = match s.strip_prefix('-') {
         Some(b) => ("-", b),
         None => ("", s),
     };
-    match body.split_once('.') {
-        Some((i, f)) => format!("{}{}.{}", sign, group_digits(i), f),
-        None => format!("{}{}", sign, group_digits(body)),
+    // RF-N-07：关闭前导零时 `0.5` → `.5`（仅整数部分恰为 0 的小数）。
+    let body = if !st.leading_zero && body.starts_with("0.") {
+        &body[1..]
+    } else {
+        body
+    };
+    let out = match body.split_once('.') {
+        Some((i, f)) => {
+            let gi = if st.grouping && !st.group_separator.is_empty() {
+                group_digits_with(i, &st.group_separator, st.group_pattern)
+            } else {
+                i.to_string()
+            };
+            format!("{}{}{}", gi, st.decimal_separator, f)
+        }
+        None => {
+            if st.grouping && !st.group_separator.is_empty() {
+                group_digits_with(body, &st.group_separator, st.group_pattern)
+            } else {
+                body.to_string()
+            }
+        }
+    };
+    format!("{}{}", sign, out)
+}
+
+/// RF-N-06：把带 `-` 前缀的渲染结果改写为选定负数格式（`minus_plain` 恒等）。
+fn apply_negative_format(rendered: &str, st: &RegionStyle) -> String {
+    if st.negative_format == NegativeNumberFormat::MinusPlain || !rendered.starts_with('-') {
+        return rendered.to_string();
+    }
+    let body = &rendered[1..];
+    match st.negative_format {
+        NegativeNumberFormat::MinusPlain => rendered.to_string(),
+        NegativeNumberFormat::MinusSpace => format!("- {}", body),
+        NegativeNumberFormat::MinusParen => format!("({})", body),
+        NegativeNumberFormat::TrailingMinus => format!("{}-", body),
+        NegativeNumberFormat::TrailingMinusSpace => format!("{} -", body),
+    }
+}
+
+/// 把串中**第一个** `.` 换成区域小数分隔符（科学/工程记数法尾数专用——
+/// 其余路径在 `apply_group_styled` 里按 int/frac 分割后直接拼接，避免歧义）。
+fn swap_decimal(s: &str, sep: &str) -> String {
+    if sep == "." {
+        return s.to_string();
+    }
+    match s.find('.') {
+        Some(i) => format!("{}{}{}", &s[..i], sep, &s[i + 1..]),
+        None => s.to_string(),
     }
 }
 
@@ -239,7 +540,7 @@ fn decimal_exponent(v: f64) -> i32 {
     }
 }
 
-fn render_plain(digits: &str, exp: i32, neg: bool, group: bool) -> String {
+fn render_plain(digits: &str, exp: i32, neg: bool, st: &RegionStyle) -> String {
     let point = exp + 1;
     let body = if point <= 0 {
         format!("0.{}{}", "0".repeat((-point) as usize), digits)
@@ -257,17 +558,19 @@ fn render_plain(digits: &str, exp: i32, neg: bool, group: bool) -> String {
     if neg && !all_zero && out != "0" {
         out.insert(0, '-');
     }
-    apply_group(&out, group)
+    apply_group_styled(&out, st)
 }
 
 /// 科学计数法渲染：`1.23456789×10⁸`；指数为 0 时省略 `×10⁰`。
-fn render_sci(digits: &str, exp: i32, neg: bool) -> String {
+fn render_sci(digits: &str, exp: i32, neg: bool, st: &RegionStyle) -> String {
     let mant = if digits.len() <= 1 {
         digits.to_string()
     } else {
         format!("{}.{}", &digits[..1], &digits[1..])
     };
     let mant = trim_zeros(&mant);
+    // RF-N-01：尾数里唯一的 `.` 换成区域小数分隔符。
+    let mant = swap_decimal(&mant, &st.decimal_separator);
     let head = if neg && mant != "0" {
         format!("-{}", mant)
     } else {
@@ -284,7 +587,7 @@ fn render_sci(digits: &str, exp: i32, neg: bool) -> String {
 ///
 /// `digits` 为有效数字串（不含小数点与符号），`exp` 为首位的十进制指数
 /// （即 `值 = d.ddd… × 10^exp`）。对齐后的指数为 0 时省略 `×10⁰`。
-fn render_engineering(digits: &str, exp: i32, neg: bool, group: bool) -> String {
+fn render_engineering(digits: &str, exp: i32, neg: bool, st: &RegionStyle) -> String {
     // 把指数下调到 3 的倍数：mant_exp ∈ {0,1,2}，mantissa_exp 为 3 的倍数。
     let mant_exp = ((exp % 3) + 3) % 3;
     let mantissa_exp = exp - mant_exp;
@@ -299,7 +602,7 @@ fn render_engineering(digits: &str, exp: i32, neg: bool, group: bool) -> String 
     if neg && !all_zero && mant != "0" {
         mant.insert(0, '-');
     }
-    let mant = apply_group(&mant, group);
+    let mant = apply_group_styled(&mant, st);
     if mantissa_exp == 0 {
         mant
     } else {
@@ -308,15 +611,15 @@ fn render_engineering(digits: &str, exp: i32, neg: bool, group: bool) -> String 
 }
 
 /// 工程记数法的完整渲染：整数走全精度，其余走当前有效位数。
-fn engineering_number(n: &Num, s: &NumberFormatSettings) -> String {
+fn engineering_number(n: &Num, s: &NumberFormatSettings, st: &RegionStyle) -> String {
     if let Ok(i) = n.try_as_i64() {
         let digits = i.unsigned_abs().to_string();
         let exp = digits.len() as i32 - 1;
-        return render_engineering(&digits, exp, i < 0, s.grouping);
+        return render_engineering(&digits, exp, i < 0, st);
     }
     let v = n.to_f64();
     let (digits, exp, neg) = sig_parts(v, s.precision);
-    render_engineering(&digits, exp, neg, s.grouping)
+    render_engineering(&digits, exp, neg, st)
 }
 
 /// 把有理数写成有限十进制串；分母含 2/5 以外的因子则返回 `None`。
@@ -419,8 +722,23 @@ fn precision_fits(exact: &str, s: &NumberFormatSettings) -> bool {
 
 // ── 公开 API ────────────────────────────────────────────────
 
-/// 按设置格式化数值。
+/// 按设置格式化数值（默认区域风格，与既有行为逐字节一致）。
 pub fn format_number(n: &Num, s: &NumberFormatSettings) -> Result<String> {
+    format_number_styled(n, s, &RegionFormatConfig::default())
+}
+
+/// 按设置 + 区域格式格式化数值（A1：区域配置经 `set_region_format` 落会话）。
+pub fn format_number_styled(
+    n: &Num,
+    s: &NumberFormatSettings,
+    region: &RegionFormatConfig,
+) -> Result<String> {
+    let st = region.resolve_with(s.grouping);
+    let rendered = format_number_inner(n, s, &st)?;
+    Ok(apply_negative_format(&rendered, &st))
+}
+
+fn format_number_inner(n: &Num, s: &NumberFormatSettings, st: &RegionStyle) -> Result<String> {
     validate(s)?;
     match n {
         Num::Special(Special::Nan) => return Ok("非数值".to_string()),
@@ -438,7 +756,7 @@ pub fn format_number(n: &Num, s: &NumberFormatSettings) -> Result<String> {
     // 工程记数法：整数与小数统一处理，且**优先于**精确十进制捷径
     // （CP-08 要求 `0.0123` 显示为 `12.3×10⁻³` 而非精确串 `0.0123`）。
     if matches!(s.notation, Notation::Engineering) {
-        return Ok(engineering_number(n, s));
+        return Ok(engineering_number(n, s, st));
     }
 
     // 整数：不受精度截断（否则 20! 会被有效位砍掉）。
@@ -450,17 +768,17 @@ pub fn format_number(n: &Num, s: &NumberFormatSettings) -> Result<String> {
             let neg = i < 0;
             let digits: String = t.chars().filter(|c| c.is_ascii_digit()).collect();
             let exp = (digits.len() as i32) - 1;
-            return Ok(render_sci(&digits, exp, neg));
+            return Ok(render_sci(&digits, exp, neg, st));
         }
         let t = i.to_string();
-        return Ok(apply_group(&t, s.grouping));
+        return Ok(apply_group_styled(&t, st));
     }
 
     // 有限十进制的有理数：精度放得下就用精确串
     if let Num::Rational { num, den } = n {
         if let Some(exact) = exact_decimal_string(*num, *den) {
             if precision_fits(&exact, s) {
-                return Ok(apply_group(&exact, s.grouping));
+                return Ok(apply_group_styled(&exact, st));
             }
         }
     }
@@ -472,9 +790,9 @@ pub fn format_number(n: &Num, s: &NumberFormatSettings) -> Result<String> {
             let use_sci = matches!(s.notation, Notation::Scientific)
                 || (matches!(s.notation, Notation::Auto) && (exp >= 12 || exp <= -9));
             Ok(if use_sci {
-                render_sci(&digits, exp, neg)
+                render_sci(&digits, exp, neg, st)
             } else {
-                render_plain(&digits, exp, neg, s.grouping)
+                render_plain(&digits, exp, neg, st)
             })
         }
         PrecisionMode::DecimalPlaces => {
@@ -482,10 +800,10 @@ pub fn format_number(n: &Num, s: &NumberFormatSettings) -> Result<String> {
                 let e = decimal_exponent(v);
                 let sig = (e + 1 + s.precision as i32).clamp(1, MAX_PRECISION as i32) as u8;
                 let (d, e2, neg) = sig_parts(v, sig);
-                Ok(render_sci(&d, e2, neg))
+                Ok(render_sci(&d, e2, neg, st))
             } else {
                 let t = format!("{:.*}", s.precision as usize, v);
-                Ok(apply_group(&trim_zeros(&t), s.grouping))
+                Ok(apply_group_styled(&trim_zeros(&t), st))
             }
         }
     }
@@ -550,7 +868,7 @@ pub fn format_scientific(v: f64, sig: u8) -> String {
         };
     }
     let (d, e, neg) = sig_parts(v, sig.clamp(1, MAX_PRECISION));
-    render_sci(&d, e, neg)
+    render_sci(&d, e, neg, &RegionStyle::default())
 }
 
 /// 不带分组、尽量保留信息的十进制串（供进制结果行等非主显示场景用）。
@@ -571,12 +889,112 @@ pub fn plain_decimal(n: &Num) -> String {
             let v = n.to_f64();
             let (d, e, neg) = sig_parts(v, MAX_PRECISION);
             if e > 30 || e < -15 {
-                render_sci(&d, e, neg)
+                render_sci(&d, e, neg, &RegionStyle::default())
             } else {
-                render_plain(&d, e, neg, false)
+                render_plain(&d, e, neg, &RegionStyle { grouping: false, ..RegionStyle::default() })
             }
         }
     }
+}
+
+// ── 货币格式化（RF-C-01~07，A1/Q8）─────────────────────────────────────────
+
+/// 货币渲染结果：`display` 为该值本身的渲染，`negative_display` 为取负后的渲染
+/// （RF-C-03 的 16 种组合）。
+#[derive(Debug, Clone, PartialEq)]
+pub struct CurrencyRender {
+    /// 正值渲染，如 `¥3.50`。
+    pub display: String,
+    /// 取负后的渲染，如 `(¥3.50)`。
+    pub negative_display: String,
+}
+
+/// 按货币符号位置摆放符号（RF-C-02 的 4 种）。
+fn place_symbol(amount: &str, symbol: &str, fmt: CurrencyPositiveFormat) -> String {
+    match fmt {
+        CurrencyPositiveFormat::Before => format!("{}{}", symbol, amount),
+        CurrencyPositiveFormat::After => format!("{}{}", amount, symbol),
+        CurrencyPositiveFormat::BeforeSpace => format!("{} {}", symbol, amount),
+        CurrencyPositiveFormat::AfterSpace => format!("{} {}", amount, symbol),
+    }
+}
+
+/// 按 RF-C-03 的符号位包裹负数金额（金额须为**无符号**串）。
+fn wrap_negative(signed: String, sign: CurrencyNegativeSign) -> String {
+    match sign {
+        CurrencyNegativeSign::Paren => format!("({})", signed),
+        CurrencyNegativeSign::Before => format!("-{}", signed),
+        CurrencyNegativeSign::BeforeSpace => format!("- {}", signed),
+        CurrencyNegativeSign::Trailing => format!("{}-", signed),
+    }
+}
+
+/// 货币金额：按货币小数位**定点**渲染（保留尾零，`3.5` → `3.50`），
+/// 使用货币自己的分隔符/分组方式（RF-C-04/05/06）。
+fn currency_amount(abs: f64, digits: u8, st: &RegionStyle) -> String {
+    let s = format!("{:.*}", digits as usize, abs);
+    let (int_part, frac) = match s.split_once('.') {
+        Some((i, f)) => (i, Some(f)),
+        None => (s.as_str(), None),
+    };
+    let gi = if st.grouping && !st.group_separator.is_empty() {
+        group_digits_with(int_part, &st.group_separator, st.group_pattern)
+    } else {
+        int_part.to_string()
+    };
+    match frac {
+        Some(f) => format!("{}{}{}", gi, st.decimal_separator, f),
+        None => gi,
+    }
+}
+
+/// 货币格式化（RF-C-01~07）。
+///
+/// 金额取绝对值渲染、再按正/负格式摆放符号；特殊值（非有限）返回 `InvalidSettings`。
+pub fn format_currency_pair(
+    v: &Num,
+    cfg: &CurrencyFormatConfig,
+    _region: &RegionFormatConfig,
+) -> Result<CurrencyRender> {
+    let f = v.to_f64();
+    if !f.is_finite() {
+        return Err(EngineError::with_message(
+            ErrorKind::InvalidSettings,
+            "货币格式化需要有限数值".to_string(),
+        ));
+    }
+    let symbol = cfg.symbol.clone().unwrap_or_else(|| "¥".to_string());
+    let pos_fmt = cfg.positive_format.unwrap_or_default();
+    let neg_fmt = cfg.negative_format.unwrap_or_default();
+    let digits = cfg.decimal_digits.unwrap_or(2).min(9);
+    let st = RegionStyle {
+        grouping: true,
+        decimal_separator: cfg
+            .decimal_separator
+            .clone()
+            .unwrap_or_else(|| ".".to_string()),
+        group_separator: cfg
+            .group_separator
+            .clone()
+            .unwrap_or_else(|| ",".to_string()),
+        group_pattern: cfg.group_pattern.unwrap_or(GroupPattern::Standard),
+        leading_zero: true,
+        negative_format: NegativeNumberFormat::MinusPlain,
+    };
+
+    let amount = currency_amount(f, digits, &st);
+    let display = if f < 0.0 {
+        wrap_negative(place_symbol(&amount, &symbol, neg_fmt.symbol), neg_fmt.sign)
+    } else {
+        place_symbol(&amount, &symbol, pos_fmt)
+    };
+    let neg_amount = currency_amount(-f, digits, &st);
+    let negative_display =
+        wrap_negative(place_symbol(&neg_amount, &symbol, neg_fmt.symbol), neg_fmt.sign);
+    Ok(CurrencyRender {
+        display,
+        negative_display,
+    })
 }
 
 #[cfg(test)]

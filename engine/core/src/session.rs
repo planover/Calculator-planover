@@ -108,6 +108,10 @@ pub struct Session {
     pub ans: Option<Num>,
     /// 当前设置。
     pub settings: EngineSettings,
+    /// 区域格式（A1：数字/货币渲染的单一数据源，PRD-INCREMENT-v2 §6）。
+    ///
+    /// 缺省 = `RegionFormatConfig::default()` = 现状行为，不破坏既有测试。
+    pub region_format: crate::format::RegionFormatConfig,
 }
 
 impl Default for Session {
@@ -123,6 +127,7 @@ impl Session {
             variables: HashMap::new(),
             ans: None,
             settings: EngineSettings::default(),
+            region_format: crate::format::RegionFormatConfig::default(),
         }
     }
 

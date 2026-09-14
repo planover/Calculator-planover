@@ -175,6 +175,28 @@ pub extern "C" fn calc_memory_recall(req: *const c_char) -> *mut c_char {
     call("memory_recall", req)
 }
 
+/// 设置区域格式（A1：数字/货币渲染的单一数据源，PRD-INCREMENT-v2 §6）。
+///
+/// 请求为 [`calculator_core::format::RegionFormatConfig`] 的 JSON；响应
+/// `{"ok":true,"data":{"applied":true}}`。
+#[no_mangle]
+pub extern "C" fn calc_set_region_format(req: *const c_char) -> *mut c_char {
+    call("set_region_format", req)
+}
+
+/// 货币格式化（RF-C）：`{"value":"3.5","currency":{...}}`，
+/// 响应同时给出正值与取负渲染（RF-C-03 的 16 种组合）。
+#[no_mangle]
+pub extern "C" fn calc_format_currency(req: *const c_char) -> *mut c_char {
+    call("format_currency", req)
+}
+
+/// LC-09 输入规范化：把区域小数分隔符替换为引擎内部的 `.`（A4）。
+#[no_mangle]
+pub extern "C" fn calc_normalize_expression(req: *const c_char) -> *mut c_char {
+    call("normalize_expression", req)
+}
+
 /// 释放本库分配的 C 字符串。
 ///
 /// 对 `nullptr` 调用是安全的 no-op；**同一指针禁止释放两次**。

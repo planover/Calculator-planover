@@ -166,6 +166,11 @@ impl Engine {
         Ok(())
     }
 
+    /// 设置区域格式（A1：数字/货币渲染的单一数据源，PRD-INCREMENT-v2 §6）。
+    pub fn set_region_format(&mut self, cfg: crate::format::RegionFormatConfig) {
+        self.session.region_format = cfg;
+    }
+
     /// 重置会话（清变量，**保留 ans**）。
     ///
     /// **记忆寄存器一并清零**（已裁决 Q13-1：记忆随 `reset_session` 清零，与 `ans`
@@ -210,7 +215,7 @@ impl Engine {
         };
 
         let fmt = self.session.settings.format;
-        let display = format::format_number(&value, &fmt)?;
+        let display = format::format_number_styled(&value, &fmt, &self.session.region_format)?;
         let fraction = format::format_fraction(&value, fmt.fraction_mode);
         let base = crate::base::repr_of(&value, self.session.settings.word_size);
 
@@ -322,7 +327,7 @@ impl Engine {
     pub fn format_number(&self, value: &Num) -> Result<FormattedValue> {
         let fmt = self.session.settings.format;
         Ok(FormattedValue {
-            display: format::format_number(value, &fmt)?,
+            display: format::format_number_styled(value, &fmt, &self.session.region_format)?,
             fraction: format::format_fraction(value, fmt.fraction_mode),
             approx: value.to_f64(),
             is_integer: value.is_int(),

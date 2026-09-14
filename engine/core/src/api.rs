@@ -12,7 +12,8 @@ use crate::edit::{self, EditAction, EditRequest, EditResult};
 use crate::engine::{ConstantInfo, ConvertResult, Engine, EvalResult, FormattedValue};
 use crate::error::{EngineError, ErrorKind, Result};
 use crate::format::{
-    FractionMode, Notation, NumberFormatSettings, PrecisionMode, MAX_PRECISION, MIN_PRECISION,
+    CurrencyFormatConfig, FractionMode, Notation, NumberFormatSettings, PrecisionMode,
+    RegionFormatConfig, MAX_PRECISION, MIN_PRECISION,
 };
 use crate::num::{Num, Special};
 use crate::session::{AngleMode, VariableInfo};
@@ -31,6 +32,9 @@ pub struct EvaluateRequest {
     /// 可选设置；省略则用会话当前设置。
     #[serde(default)]
     pub settings: Option<SettingsDto>,
+    /// 可选区域格式（A1）；省略则沿用会话当前值。
+    #[serde(default)]
+    pub region_format: Option<RegionFormatConfig>,
     /// 可选光标位置，仅用于错误高亮上下文。
     #[serde(default)]
     pub cursor: Option<usize>,
@@ -650,6 +654,48 @@ impl ErrorDto {
     }
 }
 
+/// `set_region_format` 回执（A1）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct AppliedDto {
+    pub applied: bool,
+}
+
+/// `format_currency` 请求（RF-C）：`value` 为表达式；`currency` 可选覆盖会话配置。
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct FormatCurrencyRequest {
+    #[serde(default)]
+    pub value: String,
+    #[serde(default)]
+    pub currency: Option<CurrencyFormatConfig>,
+}
+
+/// `format_currency` 回执：该值渲染 + 取负渲染（RF-C-03 的 16 种组合）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct CurrencyDisplayDto {
+    pub display: String,
+    pub negative_display: String,
+}
+
+/// `normalize_expression` 请求（LC-09/A4）：区域小数分隔符 → 引擎内部 `.`。
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct NormalizeDecimalRequest {
+    #[serde(default)]
+    pub expr: String,
+    #[serde(default)]
+    pub decimal_separator: Option<String>,
+}
+
+/// `normalize_expression` 回执。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct NormalizedExprDto {
+    pub expr: String,
+}
+
 // ── 分发 ────────────────────────────────────────────────────
 
 fn ok<T: Serialize>(data: &T) -> String {
@@ -865,6 +911,35 @@ pub fn dispatch(method: &str, payload_json: &str, engine: &mut Engine) -> String
             Err(e) => err(&e),
         },
 
+        "set_region_format" => match parse_payload::<RegionFormatConfig>(payload_json) {
+            Ok(cfg) => match cfg.validate() {
+                Ok(()) => {
+                    engine.set_region_format(cfg);
+                    ok(&AppliedDto { applied: true })
+                }
+                Err(e) => err(&e),
+            },
+            Err(e) => err(&e),
+        },
+
+        "format_currency" => match parse_payload::<FormatCurrencyRequest>(payload_json) {
+            Ok(req) => match handle_format_currency(engine, &req) {
+                Ok(d) => ok(&d),
+                Err(e) => err(&e),
+            },
+            Err(e) => err(&e),
+        },
+
+        "normalize_expression" => match parse_payload::<NormalizeDecimalRequest>(payload_json) {
+            Ok(req) => {
+                let sep = req.decimal_separator.unwrap_or_else(|| ".".to_string());
+                ok(&NormalizedExprDto {
+                    expr: edit::normalize_decimal(&req.expr, &sep),
+                })
+            }
+            Err(e) => err(&e),
+        },
+
         other => err(&EngineError::with_message(
             ErrorKind::InvalidRequest,
             format!("未知方法 {}", other),
@@ -879,6 +954,10 @@ fn handle_evaluate(
 ) -> Result<EvalResultDto> {
     if let Some(s) = &req.settings {
         s.apply_to(engine)?;
+    }
+    if let Some(rf) = &req.region_format {
+        rf.validate()?;
+        engine.set_region_format(rf.clone());
     }
     let r = if commit {
         engine.evaluate_commit(&req.expr)?
@@ -914,7 +993,8 @@ fn handle_format_number(engine: &Engine, req: &FormatNumberRequest) -> Result<Fo
     match &req.settings {
         Some(f) => {
             let s = f.to_settings(engine.settings().format)?;
-            let display = crate::format::format_number(&v, &s)?;
+            let display =
+                crate::format::format_number_styled(&v, &s, &engine.session().region_format)?;
             Ok(FormattedValueDto {
                 display,
                 fraction: crate::format::format_fraction(&v, s.fraction_mode),
@@ -926,10 +1006,61 @@ fn handle_format_number(engine: &Engine, req: &FormatNumberRequest) -> Result<Fo
     }
 }
 
+/// 货币格式化（RF-C）：会话区域里的货币配置 + 请求级覆盖。
+fn handle_format_currency(
+    engine: &Engine,
+    req: &FormatCurrencyRequest,
+) -> Result<CurrencyDisplayDto> {
+    let v = crate::eval::eval_simple(&req.value, engine.settings())?;
+    let mut cfg = engine
+        .session()
+        .region_format
+        .currency
+        .clone()
+        .unwrap_or_default();
+    if let Some(o) = &req.currency {
+        merge_currency(&mut cfg, o);
+    }
+    let r = crate::format::format_currency_pair(&v, &cfg, &engine.session().region_format)?;
+    Ok(CurrencyDisplayDto {
+        display: r.display,
+        negative_display: r.negative_display,
+    })
+}
+
+/// 货币配置合并：覆盖项里的 `Some` 字段覆盖会话值（RF-C 每项可独立覆盖）。
+fn merge_currency(base: &mut CurrencyFormatConfig, o: &CurrencyFormatConfig) {
+    if o.symbol.is_some() {
+        base.symbol = o.symbol.clone();
+    }
+    if o.positive_format.is_some() {
+        base.positive_format = o.positive_format;
+    }
+    if o.negative_format.is_some() {
+        base.negative_format = o.negative_format;
+    }
+    if o.decimal_separator.is_some() {
+        base.decimal_separator = o.decimal_separator.clone();
+    }
+    if o.decimal_digits.is_some() {
+        base.decimal_digits = o.decimal_digits;
+    }
+    if o.group_separator.is_some() {
+        base.group_separator = o.group_separator.clone();
+    }
+    if o.group_pattern.is_some() {
+        base.group_pattern = o.group_pattern;
+    }
+}
+
 /// 组装记忆寄存器回执（值 + 显示串 + 回插字面量 + 是否为零）。
 fn memory_dto(engine: &Engine) -> Result<MemoryDto> {
     let v = engine.memory_value();
-    let display = crate::format::format_number(&v, &engine.settings().format)?;
+    let display = crate::format::format_number_styled(
+        &v,
+        &engine.settings().format,
+        &engine.session().region_format,
+    )?;
     Ok(MemoryDto {
         value: NumDto::of(&v),
         display,
@@ -1204,6 +1335,67 @@ mod tests {
         assert_eq!(
             serde_json::from_str::<Value>(&out).unwrap()["data"]["is_zero"],
             true
+        );
+    }
+
+    #[test]
+    fn set_region_format_contract() {
+        let mut e = Engine::new();
+        // 设置 de-DE 风格：逗号小数 + 点千分位
+        let out = dispatch(
+            "set_region_format",
+            r#"{"decimal_separator":",","group_separator":"."}"#,
+            &mut e,
+        );
+        let v: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["data"]["applied"], true);
+        // 之后求值应使用该区域格式渲染
+        let out2 = dispatch("evaluate_preview", r#"{"expr":"1234.5"}"#, &mut e);
+        assert_eq!(
+            serde_json::from_str::<Value>(&out2).unwrap()["data"]["display"],
+            "1.234,5"
+        );
+    }
+
+    #[test]
+    fn set_region_format_rejects_illegal_separator() {
+        let mut e = Engine::new();
+        let out = dispatch(
+            "set_region_format",
+            r#"{"decimal_separator":"ab"}"#,
+            &mut e,
+        );
+        assert_eq!(
+            serde_json::from_str::<Value>(&out).unwrap()["error"]["kind"],
+            "invalid_settings"
+        );
+    }
+
+    #[test]
+    fn format_currency_contract() {
+        let mut e = Engine::new();
+        let out = dispatch(
+            "format_currency",
+            r#"{"value":"3.5","currency":{"symbol":"¥","decimal_digits":2}}"#,
+            &mut e,
+        );
+        let v: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["data"]["display"], "¥3.50");
+        assert_eq!(v["data"]["negative_display"], "(¥3.50)");
+    }
+
+    #[test]
+    fn normalize_expression_contract() {
+        let mut e = Engine::new();
+        let out = dispatch(
+            "normalize_expression",
+            r#"{"expr":"3,14+2,5","decimal_separator":","}"#,
+            &mut e,
+        );
+        assert_eq!(
+            serde_json::from_str::<Value>(&out).unwrap()["data"]["expr"],
+            "3.14+2.5"
         );
     }
 }

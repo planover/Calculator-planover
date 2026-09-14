@@ -21,6 +21,7 @@ pub mod engine;
 pub mod error;
 pub mod eval;
 pub mod format;
+pub mod format_pattern;
 pub mod functions;
 pub mod lexer;
 pub mod memory;

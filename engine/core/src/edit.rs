@@ -308,6 +308,30 @@ fn scan_match(chars: &[char], idx: usize, forward: bool) -> Option<usize> {
     }
 }
 
+// ── LC-09：小数点双向映射（A4：表达式内部语法恒为 `.`）─────────────────────
+
+/// 输入方向（LC-09）：把用户键入的区域小数分隔符规范化为引擎内部的 `.`。
+///
+/// 例：de-DE 区域（`,`) 下 `"3,14+2,5"` → `"3.14+2.5"`。
+/// `sep` 为 `.` 或空串时恒等。注意：本函数按字面替换，区域分隔符与引擎
+/// 其它语法字符（如参数分隔符）重合时以区域分隔符优先（计算器表达式不涉及多参函数）。
+pub fn normalize_decimal(expr: &str, sep: &str) -> String {
+    if sep.is_empty() || sep == "." {
+        return expr.to_string();
+    }
+    expr.replace(sep, ".")
+}
+
+/// 显示方向（LC-09）：把引擎内部的 `.` 反向映射为区域小数分隔符。
+///
+/// 例：de-DE 区域下内部 `"3.14"` 显示为 `"3,14"`。
+pub fn denormalize_decimal(expr: &str, sep: &str) -> String {
+    if sep.is_empty() || sep == "." {
+        return expr.to_string();
+    }
+    expr.replace('.', sep)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
