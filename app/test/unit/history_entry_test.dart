@@ -8,7 +8,7 @@ import 'package:calculator_planover/src/models/history_entry.dart';
 void main() {
   group('HistoryEntry.usedMemory 往返', () {
     test('默认 false；toMap / fromMap 保留', () {
-      final HistoryEntry e = const HistoryEntry(expr: '1+2', result: '3', ts: 100);
+      const HistoryEntry e = HistoryEntry(expr: '1+2', result: '3', ts: 100);
       expect(e.usedMemory, isFalse);
       expect(e.toMap()['used_memory'], 0);
 
@@ -18,7 +18,7 @@ void main() {
     });
 
     test('usedMemory=true 经 toMap / fromMap 保留', () {
-      final HistoryEntry e = const HistoryEntry(
+      const HistoryEntry e = HistoryEntry(
         expr: 'MR',
         result: '5',
         ts: 200,

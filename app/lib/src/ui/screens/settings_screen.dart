@@ -56,13 +56,13 @@ class SettingsScreen extends StatelessWidget {
           ]),
           _Section(
             title: l10n.tr('ui.settings.displayFormat'),
-            children: <Widget>[
-              const _NotationRow(),
-              const _PrecisionModeRow(),
-              const _PrecisionRow(),
-              const _FractionRow(),
-              const _GroupingRow(),
-              const _SubmitRow(),
+            children: const <Widget>[
+              _NotationRow(),
+              _PrecisionModeRow(),
+              _PrecisionRow(),
+              _FractionRow(),
+              _GroupingRow(),
+              _SubmitRow(),
             ],
           ),
           _Section(title: l10n.tr('ui.settings.about'), children: <Widget>[

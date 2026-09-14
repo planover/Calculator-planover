@@ -37,7 +37,7 @@ void main() async {
     debugPrint(stack.toString());
   }
 
-  final SettingsStore store = const SharedPreferencesSettingsStore();
+  const SettingsStore store = SharedPreferencesSettingsStore();
   final SettingsController settings = SettingsController(store: store);
   final LocaleController locale = LocaleController(store: store);
 
