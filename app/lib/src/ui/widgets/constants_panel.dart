@@ -23,7 +23,7 @@ class ConstantsPanel extends StatelessWidget {
     final CalculatorController calc =
         Provider.of<CalculatorController>(context, listen: false);
     final AppLocalizations l10n =
-        Provider.of<LocaleController>(context, listen: false).l10n;
+        Provider.of<LocaleController>(context, listen: true).l10n;
     final List<ConstantInfo> constants = calc.engine.listConstants();
 
     if (constants.isEmpty) {

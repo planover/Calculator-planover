@@ -31,7 +31,7 @@ class _MemorySheetBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n =
-        Provider.of<LocaleController>(context, listen: false).l10n;
+        Provider.of<LocaleController>(context, listen: true).l10n;
     final CalculatorController calc =
         Provider.of<CalculatorController>(context, listen: true);
 

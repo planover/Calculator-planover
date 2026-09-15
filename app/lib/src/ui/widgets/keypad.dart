@@ -34,7 +34,7 @@ class Keypad extends StatelessWidget {
     final CalculatorController calc =
         Provider.of<CalculatorController>(context, listen: false);
     final AppLocalizations l10n =
-        Provider.of<LocaleController>(context, listen: false).l10n;
+        Provider.of<LocaleController>(context, listen: true).l10n;
     // 区域格式可选注入：测试/预览未提供时回落语言 CLDR（LC-09）。
     final RegionFormatController? region =
         Provider.of<RegionFormatController?>(context, listen: false);
@@ -135,17 +135,22 @@ class Keypad extends StatelessWidget {
       ],
     ];
 
-    return Column(
-      children: rows
-          .map(
-            (List<Widget> row) => Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: row,
+    // UX-03 / IC-5：RTL 下键盘整体钉死 `ltr` —— "镜像"由整体布局层承担，
+    // **不**镜像数字网格（否则 `1 2 3` 会变成 `3 2 1`，且保护既有 keypad_test）。
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Column(
+        children: rows
+            .map(
+              (List<Widget> row) => Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: row,
+                ),
               ),
-            ),
-          )
-          .toList(growable: false),
+            )
+            .toList(growable: false),
+      ),
     );
   }
 }

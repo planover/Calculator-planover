@@ -6,6 +6,9 @@
 /// - 显示格式：记数法（含 Engineering，CP-08）、精度模式/精度、分数、千位分隔、
 ///   提交方式（calculate-on-fly / 手动，UI-13）；
 /// - 关于：版本、引擎、记忆寄存器与 `ans` 区别说明（CP-17）、复数不支持说明（CP-19）。
+///
+/// UX-01：本页 12 处展示文案处的 `LocaleController` 取值一律 `listen: true`
+/// （仅 `_RegionRow` 里触发 action 用的 `listen: false` 保留，且**不解引用** `.l10n`）。
 library;
 
 import 'package:flutter/material.dart';
@@ -23,6 +26,7 @@ import '../../storage/settings_store.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/tokens.dart';
 import '../../l10n/region_registry.dart';
+import 'language_picker_screen.dart';
 
 /// 设置页。
 class SettingsScreen extends StatelessWidget {
@@ -122,7 +126,7 @@ class _ThemeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n =
-        Provider.of<LocaleController>(context, listen: false).l10n;
+        Provider.of<LocaleController>(context, listen: true).l10n;
     final SettingsController settings =
         Provider.of<SettingsController>(context, listen: true);
     return ListTile(
@@ -155,9 +159,11 @@ class _RegionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n =
-        Provider.of<LocaleController>(context, listen: false).l10n;
+        Provider.of<LocaleController>(context, listen: true).l10n;
     final RegionFormatController region =
         Provider.of<RegionFormatController>(context, listen: true);
+    // ⚠️ 此处 `listen: false` 仅用于**触发 action**（取 `manualTag` 传给
+    // `region.setRegion`），**不解引用 `.l10n`** → 合法，保持不动（架构 §3.1）。
     final LocaleController locale =
         Provider.of<LocaleController>(context, listen: false);
     return ListTile(
@@ -190,6 +196,7 @@ class _RegionRow extends StatelessWidget {
   }
 }
 
+/// 语言选择入口（Q3 用户裁决：打开**独立全屏路由页**，非下拉/弹层）。
 class _LanguageRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -197,24 +204,29 @@ class _LanguageRow extends StatelessWidget {
         Provider.of<LocaleController>(context, listen: true).l10n;
     final LocaleController locale =
         Provider.of<LocaleController>(context, listen: true);
+    final String current = locale.isAuto
+        ? l10n.tr('ui.settings.languageAuto')
+        : (LocaleRegistry.find(locale.manualTag)?.native ??
+            locale.manualTag ??
+            '');
     return ListTile(
+      // `Key` 从原 `DropdownButton` 迁移到此 `ListTile`，测试点击口径不变。
+      key: const Key('openLanguagePicker'),
       title: Text(l10n.tr('ui.settings.language')),
-      subtitle: DropdownButton<String?>(
-        isExpanded: true,
-        value: locale.isAuto ? null : locale.manualTag,
-        items: <DropdownMenuItem<String?>>[
-          DropdownMenuItem<String?>(
-            value: null,
-            child: Text(l10n.tr('ui.settings.languageAuto')),
-          ),
-          for (final AppLocale l in LocaleRegistry.supported)
-            DropdownMenuItem<String?>(
-              value: l.tag,
-              child: Text('${l.native}  (${l.english})'),
-            ),
-        ],
-        onChanged: (String? tag) => locale.setLocale(tag),
-      ),
+      subtitle: Text(current),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () async {
+        final LanguagePickResult? result =
+            await LanguagePickerScreen.show(context);
+        switch (result) {
+          case null:
+            break; // 取消/返回：不改变当前语言。
+          case FollowSystem():
+            await locale.setLocale(null);
+          case PickedTag(:final String tag):
+            await locale.setLocale(tag);
+        }
+      },
     );
   }
 }
@@ -224,7 +236,7 @@ class _AngleRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n =
-        Provider.of<LocaleController>(context, listen: false).l10n;
+        Provider.of<LocaleController>(context, listen: true).l10n;
     final CalculatorController calc =
         Provider.of<CalculatorController>(context, listen: true);
     return ListTile(
@@ -260,7 +272,7 @@ class _WordSizeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n =
-        Provider.of<LocaleController>(context, listen: false).l10n;
+        Provider.of<LocaleController>(context, listen: true).l10n;
     final CalculatorController calc =
         Provider.of<CalculatorController>(context, listen: true);
     final int ws = calc.settingsWordSize;
@@ -287,7 +299,7 @@ class _NotationRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n =
-        Provider.of<LocaleController>(context, listen: false).l10n;
+        Provider.of<LocaleController>(context, listen: true).l10n;
     final SettingsController settings =
         Provider.of<SettingsController>(context, listen: true);
     return ListTile(
@@ -324,7 +336,7 @@ class _PrecisionModeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n =
-        Provider.of<LocaleController>(context, listen: false).l10n;
+        Provider.of<LocaleController>(context, listen: true).l10n;
     final SettingsController settings =
         Provider.of<SettingsController>(context, listen: true);
     return ListTile(
@@ -353,7 +365,7 @@ class _PrecisionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n =
-        Provider.of<LocaleController>(context, listen: false).l10n;
+        Provider.of<LocaleController>(context, listen: true).l10n;
     final SettingsController settings =
         Provider.of<SettingsController>(context, listen: true);
     final int p = settings.settings.precision;
@@ -376,7 +388,7 @@ class _FractionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n =
-        Provider.of<LocaleController>(context, listen: false).l10n;
+        Provider.of<LocaleController>(context, listen: true).l10n;
     final SettingsController settings =
         Provider.of<SettingsController>(context, listen: true);
     return ListTile(
@@ -409,7 +421,7 @@ class _GroupingRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n =
-        Provider.of<LocaleController>(context, listen: false).l10n;
+        Provider.of<LocaleController>(context, listen: true).l10n;
     final SettingsController settings =
         Provider.of<SettingsController>(context, listen: true);
     return SwitchListTile(
@@ -427,7 +439,7 @@ class _SubmitRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n =
-        Provider.of<LocaleController>(context, listen: false).l10n;
+        Provider.of<LocaleController>(context, listen: true).l10n;
     final SettingsController settings =
         Provider.of<SettingsController>(context, listen: true);
     return ListTile(
@@ -458,7 +470,7 @@ class _AnsVsMemoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n =
-        Provider.of<LocaleController>(context, listen: false).l10n;
+        Provider.of<LocaleController>(context, listen: true).l10n;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(Tokens.padMd),
@@ -485,7 +497,7 @@ class _ComplexHelpCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n =
-        Provider.of<LocaleController>(context, listen: false).l10n;
+        Provider.of<LocaleController>(context, listen: true).l10n;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(Tokens.padMd),

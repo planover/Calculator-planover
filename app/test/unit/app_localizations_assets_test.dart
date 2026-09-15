@@ -29,8 +29,10 @@ void main() {
     });
 
     test('en 兜底：未翻译语言回落英文，绝不回退成裸 key', () async {
-      final AppLocalizations l = await AppLocalizations.load('fr');
-      expect(l.tag, 'fr');
+      // IC-2（T01 为 T04 预置）：回落样例改用一门**确定不在本批 20 门内**的语言
+      // `sw`（Swahili）—— 避免 T04 交付 `fr.json` 后此处"精确包缺失"的断言失效。
+      final AppLocalizations l = await AppLocalizations.load('sw');
+      expect(l.tag, 'sw');
       // 回归点：修复前 fr.json 缺失会把 fallback 置空 → 此处会得到裸 key 'ui.settings.title'。
       expect(l.tr('ui.settings.title'), 'Settings');
       // 两层都没有的键，才退回 key 本身。
@@ -57,12 +59,12 @@ void main() {
     });
 
     test('精确包缺失时命中 en 兜底', () {
-      final AppLocalizations l = AppLocalizations('fr', fallback: en);
+      final AppLocalizations l = AppLocalizations('sw', fallback: en);
       expect(l.tr('ui.settings.title'), 'Settings');
     });
 
     test('两层都缺失：退回 key 本身 / 调用方原文', () {
-      final AppLocalizations l = AppLocalizations('fr');
+      final AppLocalizations l = AppLocalizations('sw');
       expect(l.tr('ui.settings.title'), 'ui.settings.title');
       expect(l.tr('ui.settings.title', fallback: '原文'), '原文');
     });
