@@ -190,6 +190,8 @@ class _LanguagePickerScreenState extends State<LanguagePickerScreen> {
         // 平板/大屏：主内容居中约束（对照 §3.2.3「双列 + maxContentWidth 居中」）。
         body: Center(
           child: ConstrainedBox(
+            // TODO(T02): 硬编码 720 由 T02 的 `Breakpoints.maxContentWidth`(=600)
+            // 统一取代（架构 §3.2.3「双列 + maxContentWidth 居中」）。本批不改实现。
             constraints: const BoxConstraints(maxWidth: 720),
             child: LayoutBuilder(
               builder: (BuildContext context, BoxConstraints constraints) {
@@ -199,6 +201,7 @@ class _LanguagePickerScreenState extends State<LanguagePickerScreen> {
                     padding: const EdgeInsets.all(Tokens.padMd),
                     gridDelegate:
                         const SliverGridDelegateWithMaxCrossAxisExtent(
+                      // TODO(T02): 硬编码 420 由 T02 的 `Breakpoints` 统一栅格宽度取代。
                       maxCrossAxisExtent: 420,
                       mainAxisExtent: 64,
                     ),
