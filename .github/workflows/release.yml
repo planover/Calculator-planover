@@ -8,6 +8,11 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # secrets 无法在 if: 条件中直接引用（GitHub 限制：steps.if 不提供 secrets 上下文，
+  # 直接引用会解析为空串导致分支恒不成立、或报 Unrecognized named-value）。
+  # 顶层 env 允许引用 secrets，故在此折算成布尔标志，供各 job 的步骤 if 使用。
+  # fork / PR 无密钥时该值为 'false'，签名步骤被跳过，由 build.gradle.kts 回退 debug 签名。
+  HAS_RELEASE_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
 
 jobs:
   build-rust-android:
@@ -67,6 +72,27 @@ jobs:
       - name: Assemble jniLibs
         # 打入 .so + 落包信息（applicationId/minSdk/targetSdk/label）+ grep 断言
         run: python3 tools/patch_android.py --artifacts artifacts
+      - name: Setup release signing (from secrets)
+        # keystore 与密码经 4 个仓库 Secret 注入；Secret 缺失时跳过（HAS_RELEASE_KEYSTORE
+        # 为 false），由 build.gradle.kts 回退到 debug 签名（fork / PR 场景仍可构建）。
+        # 注意：if 不能直接引用 secrets，故用顶层 env 折算的布尔标志。
+        if: ${{ env.HAS_RELEASE_KEYSTORE == 'true' }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "$KEYSTORE_BASE64" | base64 -d > app/android/app/planover-release.p12
+          {
+            echo "storeFile=planover-release.p12"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > app/android/key.properties
+          test -s app/android/app/planover-release.p12
+          echo "release keystore 已就绪（$(wc -c < app/android/app/planover-release.p12) 字节）"
       - name: Build APK
         working-directory: app
         run: flutter pub get && flutter build apk --release
@@ -119,3 +145,21 @@ jobs:
           echo "$BADGING" | grep -q "application-label:'Calculator-planover'" \
             || { echo "label 不符" >&2; exit 1; }
           echo "包信息断言全部通过"
+      - name: Assert APK is signed with release key
+        # 本方案核心验收点：证明 debug 签名已被替换为 release 密钥。
+        # 置于 aapt 断言之后——该步已装好 build-tools;34.0.0，apksigner 可直接使用。
+        # 无密钥环境（HAS_RELEASE_KEYSTORE=false）跳过：此时 APK 本就是 debug 签名。
+        if: ${{ env.HAS_RELEASE_KEYSTORE == 'true' }}
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          APK=apk/app-release.apk
+          BK="${ANDROID_SDK_ROOT}/build-tools/34.0.0"
+          CERTS="$("$BK/apksigner" verify --print-certs "$APK")"
+          echo "$CERTS"
+          # 签名者证书 DN 必须是我们生成的 release 证书（CN=Calculator-planover）。
+          echo "$CERTS" | grep -q "CN=Calculator-planover" \
+            || { echo "APK 未使用 release 证书签名" >&2; exit 1; }
+          echo "release 签名断言通过"

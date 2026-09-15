@@ -16,6 +16,7 @@ app/android/.idea/
 app/android/key.properties
 app/android/**/*.jks
 app/android/**/*.keystore
+app/android/**/*.p12
 *.apk
 *.aab
 # CI 由 flutter create 生成后再拷回的 gradle 壳（二进制 wrapper 不入库，见 ARCHITECTURE §2.1）
