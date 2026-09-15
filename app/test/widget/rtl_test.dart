@@ -16,7 +16,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:calculator_planover/src/ui/home_screen.dart';
 import 'package:calculator_planover/src/ui/widgets/keypad.dart';
 
-import 'support/harness.dart';
+// harness 位于 `test/support/`，本文件在 `test/widget/` → 需向上一层。
+import '../support/harness.dart';
 
 /// 键盘子树内的语义标签 Finder（避免与结果显示区/其他屏文案撞名）。
 Finder _keypadSemantics(String label) => find.descendant(

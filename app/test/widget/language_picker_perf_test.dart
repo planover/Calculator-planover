@@ -1,17 +1,22 @@
 /// UX-02 选择器性能与行为断言（`[D]`，架构 §3.2.2 / §3.2.3）：
 /// 1. 打开选择器**首帧构建项 ≤ 30**（证明 `ListView.builder` 懒加载，不再一次构建 216 项）；
-/// 2. 路由推入动画期间**P95 帧 ≤ 100ms**、**无 > 32ms 单帧**（`FrameTiming.totalSpan` 口径）；
+/// 2. 路由推入动画期间**P95 帧 ≤ 100ms**、**无 > 32ms 单帧**（`FrameTiming.totalSpan` 口径）。
+///    单帧上限取 **32ms**（≈30fps）而非 16ms：架构 §3.2.3 明确允许在"大列表首帧字体度量偏慢"
+///    时放宽到 32ms，并规避 CI 抖动误报；**P95 ≤ 100ms 的硬口径不变**。
 /// 3. 搜索可过滤、选择语言后生效且无异常。
 ///
 /// 铁律：仅 `FakeEngine`，不 import `dart:ffi`。
 library;
+
+import 'dart:ui' show FrameTiming;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:calculator_planover/src/ui/screens/language_picker_screen.dart';
 
-import 'support/harness.dart';
+// harness 位于 `test/support/`，本文件在 `test/widget/` → 需向上一层。
+import '../support/harness.dart';
 
 /// 选择器子树内的 `ListTile` 数（只数可见窗口 + 缓冲，即"首帧构建项"）。
 int _pickerTileCount() => find
@@ -71,7 +76,8 @@ void main() {
       expect(
         maxFrame,
         lessThanOrEqualTo(32 * 1000),
-        reason: '最大单帧 ${maxFrame}us > 32ms（样本 ${frameTimes.length} 帧）',
+        reason: '最大单帧 ${maxFrame}us > 32ms 上限'
+            '（架构 §3.2.3 允许放宽到 32ms≈30fps；样本 ${frameTimes.length} 帧）',
       );
     } else {
       // 测试绑定未上报帧时序时仅记录：首帧项数断言仍生效，P95 由真机/CI 复核。

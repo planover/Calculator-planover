@@ -24,7 +24,8 @@ import 'package:calculator_planover/src/l10n/locale_registry.dart';
 import 'package:calculator_planover/src/models/constant_info.dart';
 import 'package:calculator_planover/src/ui/widgets/keypad.dart';
 
-import 'support/harness.dart';
+// harness 位于 `test/support/`，本文件在 `test/widget/` → 需向上一层。
+import '../support/harness.dart';
 
 /// 设置页在 `en` 下的全部展示文案（分组标题 + 各行标题 + 关于卡片标题）。
 const List<String> _enSettings = <String>[
