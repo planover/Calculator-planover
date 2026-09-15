@@ -40,7 +40,13 @@ Future<AppHarness> _openPickerFirstFrame(WidgetTester tester, Size size) async {
   await tester.tap(find.byIcon(Icons.settings).first);
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const Key('openLanguagePicker')));
-  await tester.pump(); // 路由推入首帧
+  // ⚠️ 单次 `pump()` **不足**以让 `MaterialPageRoute` 的内容进入树：
+  // CI（run 34952381627，提交 ddf3ddb）实证 —— 单 pump 后
+  // `LanguagePickerScreen` 子树内构建项为 0（`ListView` / `GridView` 都找不到）。
+  // 故再推进一帧越过默认 300ms 的路由过渡（取 350ms 兜底），停在
+  // "路由推入完成的首屏"再数构建项。
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 350));
   return h;
 }
 
@@ -49,6 +55,13 @@ void main() {
       (WidgetTester tester) async {
     final AppHarness h =
         await _openPickerFirstFrame(tester, const Size(411, 1200));
+
+    // 自我定位：若选择页根本没打开，后续"项数"断言会假失败 —— 先钉死这一条。
+    expect(
+      find.byType(LanguagePickerScreen),
+      findsOneWidget,
+      reason: '语言选择页未打开 —— 后续列表断言会因此假失败（路由未推入 / 泵帧不足）',
+    );
 
     final int firstFrameTiles = _pickerTileCount();
     // 下界：若为 0 说明路由根本没推入 —— 此时"≤30"是假通过，必须失败。
@@ -100,6 +113,13 @@ void main() {
       (WidgetTester tester) async {
     final AppHarness h =
         await _openPickerFirstFrame(tester, const Size(800, 1280));
+
+    // 自我定位：若选择页根本没打开，后续 GridView 断言会假失败 —— 先钉死这一条。
+    expect(
+      find.byType(LanguagePickerScreen),
+      findsOneWidget,
+      reason: '语言选择页未打开 —— 后续 GridView 断言会因此假失败（路由未推入 / 泵帧不足）',
+    );
 
     final Finder gridFinder = find.descendant(
       of: find.byType(LanguagePickerScreen),
