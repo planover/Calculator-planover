@@ -165,7 +165,8 @@ void main() {
     await tester.pumpAndSettle();
 
     // ── 历史抽屉（history_sheet 的 _HistoryTile 缺陷）──
-    await h.calculator.setText('1+1');
+    // `setText` 返回 void（不可 await）；`commit` 返回 Future<void>（应 await）。
+    h.calculator.setText('1+1');
     await h.calculator.commit();
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.history).first);
