@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 由 tools/generate_app_icon.py 生成，请勿手改。 -->
-<!-- 前景层：白色抽象计算器机身；显示屏与 3×3 键位以 evenOdd 挖空，透出背景渐变。 -->
-<!-- 几何须落在 66dp 圆形安全区内（脚本已断言），否则圆形遮罩会裁掉四角。 -->
+<!-- 单色层（Android 13+ 主题图标）：系统会按壁纸取色统一着色，故此处只给形状。 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
