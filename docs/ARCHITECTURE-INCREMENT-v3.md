@@ -41,6 +41,7 @@
 | 译文完成度 | 规范 + 实现 | 新建 `l10n/language_coverage.dart`、`ui/screens/language_picker_screen.dart` | UX-09 |
 | 语言补齐 20 门 | 实现 | `app/assets/i18n/**`（+17 JSON） | UX-10 |
 | **三域翻译 + 覆盖率口径**（本次 P2 补漏） | **规范 + 实现（+补全 3 域叶子）** | 改 `app/assets/i18n/*.json`（**补 `errors`/`units`/`constants` 三域**）、新建 `app/test/support/engine_key_skeleton.dart`、改 `l10n/language_coverage.dart` | UX-09 / UX-10 |
+| **显示区窄屏溢出**（T01 阻塞，CI 实测） | **规范 + 实现（信息架构重排）** | 改 `ui/widgets/angle_mode_switch.dart`（4 段→单芯片）、`test/support/harness.dart`（通用护栏）、`ui/widgets/display_panel.dart`（行内约束） | UX-05 / UX-06 |
 
 ### 0.4 与既有裁决的一致性声明
 
@@ -345,6 +346,10 @@ Future<void> forEachDeviceClass(
   Future<void> Function(WidgetTester, DeviceClass) body,
 ) async { … }
 
+/// 通用布局护栏（§1.7）：断言本帧无 RenderFlex 溢出等布局异常。
+/// 长期生效、全局复用 —— 勿在各用例内重复实现（护栏收口在此一处）。
+void expectNoLayoutOverflow(WidgetTester tester, {String? where}) { … }
+
 /// 一档设备（代表设备 + Size）。
 class DeviceClass {
   const DeviceClass(this.name, this.size, {this.dpr = 1.0});
@@ -367,7 +372,7 @@ class DeviceClass {
 - `forEachDeviceClass` 让"无溢出/触摸区"断言**参数化复用**（见 §7 T02 的 `responsive_test.dart`）。
 
 **可断言的判据（v3 §3.1 UX-05）**：
-1. **无溢出**：`tester.takeException()` 中不得含 `RenderFlex overflow`；用 `expect(tester.takeException(), isNot(isA<FlutterError>()))` 兜底，并在 `forEachDeviceClass` 每档各断言一次。
+1. **无溢出**：统一走 §1.7 的 `expectNoLayoutOverflow(tester)`（内部 `expect(tester.takeException(), isNull)`）；在 `forEachDeviceClass` 每档各断言一次，**不再在用例内重复实现**。
 2. **触摸区**：遍历全部可见 `KeyButton`，断言其 `tester.getSize(finder)` 的宽高均 ≥ `Breakpoints.minTouch`（44dp）。
 3. **宽度约束**：`XL` 档断言存在 `ConstrainedBox(maxWidth: 600)` 且主内容 `tester.getSize` 宽 ≤ 600。
 4. **分栏/堆叠断言**：`P-short` 档断言存在含 `Expanded(flex:4)`/`(flex:6)` 的 `Row`；`P-tall` 档分别以 `landscapeLayout=split`（断言 `Row`）与 `=stacked`（断言纵向 `Column`）验证两形态。
@@ -402,6 +407,59 @@ Future<void> setLandscapeLayout(LandscapeLayout v);  // 落盘 + notifyListeners
 - `settings_store.dart` / `settings_controller.dart`：各 +2 方法（机械改动）；
 - 测试：`responsive_test.dart` 增 `P-short`（强制分栏、**无**入口）/ `P-tall`×{`split`,`stacked`}（有入口、**两形态均无溢出**）三组断言；`DeviceClass.all` 已含 `P-short`/`P-tall`（§1.5）。
 - **净增量**：约 **1 个新状态项 + 1 个入口按钮 + 3 组布局测试**；**归入 T02**（见 §7）。
+
+### 1.7 结果显示区窄屏溢出修复 + 通用护栏（**T01 阻塞项**，IC-17 / O-10）
+
+**缺陷（CI `34954426981` 实测；长期存在·非本批引入）**：
+```
+A RenderFlex overflowed by 75 pixels on the right.
+Row: app/lib/src/ui/widgets/display_panel.dart:42:20
+constraints: BoxConstraints(w=379.0)   mainAxisAlignment: spaceBetween
+```
+`display_panel.dart:42` 的 `Row(_AnsIndicator ◀ spaceBetween ▶ Row(MemoryIndicator + padSm + AngleModeSwitch))`，**内容需 454px、可用 379px**。其中 `379 = 411(M 档屏宽) − 2×Tokens.displayPad(16)`——**在 §4.2 的 M(411dp) 参照档即溢出**，320dp 更甚（可用 `320−32=288px`，溢出 ≈166px）。根因是 `angle_mode_switch.dart:26` 的 **4 段 `SegmentedButton`（`DEG`/`RAD`/`GRAD`/`TURNS`）**；`TURNS` 是增量新增的第 4 档，把该行撑爆。**Release 下溢出静默裁切（无黄条）** → 真机表现为"内容被切/对不齐"，是用户「界面错章杂乱」的真实构成。
+
+#### Q1 裁决：推荐【选项 B】—— 角度开关**留在显示区**，但由"4 段设置条"降级为"**单枚模式芯片**"（当前模式常显、点按弹出 4 选 1）；**归 T01**。
+
+- **为什么是 B 而非 A（移出显示区）**：角度模式直接决定三角/对数结果——`sin(30)` 在 DEG 与 RAD 下答案完全不同。把它从结果区**彻底移走**（A）会把"错误的模式"变成**静默错答**（用户看不到当前模式就无法解释结果）。品类惯例（原版 Calculator++、TI 图形机）均把角度模式**常显于结果区**。因此**采纳 A 对的一半**：不是"搬走"，而是**降级**——把 4 段设置条压成一枚与 `M`/`Ans` 同级的**状态芯片**，它便不再是"设置控件"，而是"结果上下文指示器"，与 `M`/`Ans` 语义自洽（同时消解了 team-lead 指出的"显示区语义混杂"）。
+- **为什么不是 C（滚动/换行）**：横向滚动会把 2~3 个模式藏到可视区外（可用性倒退）；`Wrap` 令该行高度随内容跳变、观感破碎。**均不推荐。**
+- **为什么不用"缩小 SegmentedButton"（B′）**：即便 `showSelectedIcon:false` + `VisualDensity.compact` + 缩短标签（`GRAD`→`G`/`TURNS`→`TUR`），4 段仍需 ≈250–300px——411dp（379 可用）勉强、**320dp（288 可用）仍溢出** → 不达标。**只有单芯片在 320–411 全段无溢出。**
+- **规格（可直接实现）**：`AngleModeSwitch` 改为紧凑控件——一枚承载"当前模式"的按钮（`label` = `DEG`/`RAD`/`GRAD`/`TURNS`），`ConstrainedBox(maxWidth: 76)`；点按弹 `MenuAnchor`（或 `PopupMenuButton<AngleMode>`）列出 4 项，选中即 `calc.setAngleMode(...)`（**引擎下发路径不变**，仍遵守 §10"角度唯一来源 = Rust Session"）。保留 `Semantics(label:'angle mode', button:true)` 与既有 `Key('angleModeSwitch')`（供测试点击）；移除 `SegmentedButton`。**引擎零改动。**
+- **与 T02 的边界**：**T01 无条件使用紧凑芯片**（全尺寸统一 → **不依赖** `LayoutSpec`/断点，不与 T02 纠缠）。T02 **可选**增强：当 `LayoutSpec.bp == expanded`(XL) 时可展开回 4 段 `SegmentedButton`——**加法式、非必需**，由 `responsive_test` 断言"XL 展开 / 窄屏芯片"。**不做亦完全达标。**
+- **为什么归 T01 而非 T02**：① 溢出发生在 **M(411dp)**——T01 自身的测试档位；② 修复是**组件局部改动**（不需要断点/设计体系）；③ 若归 T02，T01 的 4 个用例无法过闸（见 §7 T01 处置）。
+
+#### Q2 裁决：`_AnsIndicator` + `MemoryIndicator` 在 320dp **不会**溢出（无需改）。
+
+- 最坏情况（`Ans` 与 `M` 同时在）：`Ans` 芯片 ≈44px + `SizedBox(padSm)` 8px + `M` 芯片 ≈28px ≈ **80px**；320dp 下该行可用 `320 − 2×16 = 288px` → **余量 ≈208px**。两者文本硬编码（`'Ans'`/`'M'`，未本地化），宽度有界。
+- **唯一超宽者是 4 段角度控件**；改单芯片后，行内合计 ≈ `44 + 8 + (28 + 8 + 76) = 164px` ≪ 288px，**全档安全**。
+- **防回归**：由 Q3 通用护栏在 **S(320)** 档以"最坏状态（M + Ans 同时显示）"常驻断言。
+
+#### Q3 裁决：加一条**通用护栏**（长期生效），覆盖到触发档。
+
+1. **主界面宽度档位集合**：**全量 §1.5 六档**（`S 320` / `M 411` / `L 480` / `XL 800` / `P-short 891×411` / `P-tall 1024×600`）——**必含 `M(411)`（触发档，内宽 379）与 `S(320)`（最窄）**；**追加窄带扫掠 `{320, 360, 411, 480}`**（360 为 §4.1 compact 阈值），防边界值回归。
+2. **通用护栏（写入 `harness.dart`，长期生效，不必每用例各写）**：
+   ```dart
+   /// 通用布局护栏：断言本帧无 RenderFlex 溢出等布局异常。
+   /// 溢出经 FlutterError.reportError 记录，故以 takeException 捕获。
+   void expectNoLayoutOverflow(WidgetTester tester, {String? where}) {
+     final Object? ex = tester.takeException();
+     expect(ex, isNull, reason: '${where ?? ""}: 布局异常（RenderFlex overflow 等）→ $ex');
+   }
+   ```
+   一条参数化测试覆盖全档（替代 N 份重复）：
+   ```dart
+   for (final DeviceClass d in DeviceClass.all) {
+     testWidgets('主界面无布局溢出 @${d.name}(${d.size.width.toInt()}dp)', (t) async {
+       await pumpApp(t, size: d.size, devicePixelRatio: d.dpr); // child=null → 真实 MyApp 全树
+       // 置最坏状态：hasMemory==true 且 resultText 非空（令 M + Ans 同时显示，把该行撑到最宽）
+       await t.pumpAndSettle();
+       expectNoLayoutOverflow(t, where: d.name);
+     });
+   }
+   ```
+3. **适用范围**：该 helper 被**所有渲染主界面的 T01 用例**（`locale_refresh`/`rtl`/`language_picker_perf`）与 **T02 `responsive_test`** 复用；在 `pumpAndSettle` 后调用（溢出在 layout/paint 期报告）。
+4. **副作用预警（预期内、非误报）**：320dp 全树渲染**可能连带暴露其它溢出点**（如 `PreviewLine` 超长数字、`Keypad` 窄高键）。这些是**真实**缺陷，护栏把它揪出来正是**目的**——**严禁**通过放宽断言或容忍溢出来"转绿"。
+
+> **处置结论（Q1 的 T01/T02 归属）**：**归 T01**。T01 交付 = `angle_mode_switch.dart` 紧凑芯片化 + `harness.dart` 增 `expectNoLayoutOverflow` + 主界面全档无溢出的参数化护栏测试；**引擎零改动**。
 
 ---
 
@@ -1099,6 +1157,7 @@ void main() {
 | **IC-14** | **Q3 用户否掉"底部弹层"（用户裁决优先于 PM 推荐值）** | v3 UX-02 的 Q3（PRD §9 原列为需用户拍板的开放项；其 **PM 推荐值** = 可搜索底部弹层） | **按用户裁决**：**独立全屏路由页面** `ui/screens/language_picker_screen.dart`（`Navigator.push(MaterialPageRoute)`，同 `unit_converter_screen.dart` 模式） | `ui/screens/language_picker_screen.dart`、`settings_screen.dart` | **不得回退到 PM 推荐值**；搜索/懒加载/首帧≤30/P95≤100ms/完成度/RTL/"216 不缩减" 全部保留；平板用**双列 + `maxContentWidth` 居中**（§3.2.3） |
 | **IC-15** | **`ar` 数字本地化（`٠١٢٣`）是否在本期范围** | v3 §6.1 C20 期望含阿拉伯数字显示 | **裁定：本批次不做**（主理人确认） | —（仅边界声明，见 §7） | ① 阿语区计算器广泛接受西文数字；② 若做需在数字渲染链路引入本地化数字映射 → 触碰 A1"数字格式化归 Rust"，将引 Rust 改动，违背"纯 Dart/UI + 资源层"目标。本期 `ar` 仅验证**文案 + RTL**；列为后续可选增强 |
 | **IC-16** | **覆盖率口径"失明"：旧 `completionPct` 只数 `ui.*`（106），忽略 `errors`/`units`/`constants` 三域（空 `{}`）** | 本设计 v3.0 初版 §3.4/§4.2：`completionPct` 的**分母**仅有 `ui.*` 106 叶（`en`/`zh-CN`/`zh-TW` 三域均为空 `{}`） | **口径修正**：`KEY_UNIVERSE = leaves(en)` 的**四域全量**（228 叶）；新增 §4.2.1「键骨架校验」（`en` 三域键 == 引擎实际列表，源文件扫描）；三域文本**必须显式落盘**（含 `zh-CN`）；三域翻译并入 **T04** | `l10n/language_coverage.dart`、`app/assets/i18n/*.json`、`app/test/support/engine_key_skeleton.dart`、`app/test/unit/i18n_parity_test.dart`、`ui/screens/unit_converter_screen.dart`(类别名) | **属"规范层"缺口**（用户投诉"没适配"的真因之一）：旧口径下 **20 门语言三域零翻译仍全绿**，且 `en`/`ja`/… 界面的常量/单位/错误码**一律回落引擎中文**。修正后：漏三域 → 覆盖率上限 ≈47% → 必红；`en` 缺域由 S1/S4 单独判红。**引擎零改动**（文本只在 Dart 侧 JSON，`tr()` 拼接方式不变） |
+| **IC-17** | **`display_panel` 显示区 4 段角度开关窄屏溢出 75px（`Row` @ `display_panel.dart:42`，可用宽 379）** | PRD §4.1 ③ / T05 要点 12：角度模式切换（`DEG`/`RAD`/`GRAD`/`TURNS`）**置于结果显示区**，且以 4 段 `SegmentedButton` 全展开 | **IA 重排 + 防溢出**：角度开关**仍在显示区**但降级为**单枚模式芯片**（当前模式常显、点按弹 4 选 1）；移除 4 段 `SegmentedButton`。新增 §1.7 通用护栏 `expectNoLayoutOverflow` + 全档参数化断言 | `ui/widgets/angle_mode_switch.dart`、`ui/widgets/display_panel.dart`、`test/support/harness.dart`、`test/widget/responsive_test.dart` | **PRD §4.1 ③ 的"4 段常展开"被取代**（改为单芯片，位置不变）；溢出为**长期存在缺陷**（非本批引入），M(411dp) 即触发、320dp 更甚，Release 静默裁切 = 用户"界面错章杂乱"。修法**不依赖断点 → 归 T01**（不并入 T02），否则 T01 的 4 个渲染主界面用例无法过闸。**引擎零改动** |
 
 ---
 
@@ -1117,20 +1176,24 @@ void main() {
 改 app/lib/src/ui/widgets/history_sheet.dart         （listen:true）
 改 app/lib/src/ui/widgets/keypad.dart                （listen:true + 最外层 Directionality(ltr)）
 改 app/lib/src/ui/widgets/memory_sheet.dart          （listen:true）
+改 app/lib/src/ui/widgets/angle_mode_switch.dart      （IC-17：4 段 SegmentedButton → 单枚模式芯片 + MenuAnchor）
+改 app/lib/src/ui/widgets/display_panel.dart          （IC-17：行内约束，保证窄屏不溢出）
 新 app/lib/src/l10n/material_supported_locales.dart  （静态交集表，由 CI 打印后落定）
 新 app/lib/src/ui/screens/language_picker_screen.dart （全屏路由页面，可搜索+懒加载，LanguageOption）
 改 app/test/unit/app_localizations_assets_test.dart  （IC-2：回落样例 fr → 无包语言）
-新 app/test/support/harness.dart                     （pumpApp / forEachDeviceClass / DeviceClass）
+新 app/test/support/harness.dart                     （pumpApp / forEachDeviceClass / DeviceClass / expectNoLayoutOverflow）
 新 app/test/unit/no_listen_false_l10n_test.dart      （UX-01 静态断言）
 新 app/test/unit/material_supported_locales_test.dart（UX-02 交集断言）
-新 app/test/widget/locale_refresh_test.dart          （UX-01 逐屏刷新）
+新 app/test/widget/locale_refresh_test.dart          （UX-01 逐屏刷新 + 每屏 expectNoLayoutOverflow）
 新 app/test/widget/language_picker_perf_test.dart    （UX-02 首帧≤30 + 帧耗时）
-新 app/test/widget/rtl_test.dart                     （UX-03 方向/镜像/键盘不反转）
+新 app/test/widget/rtl_test.dart                     （UX-03 方向/镜像/键盘不反转 + expectNoLayoutOverflow）
+新 app/test/widget/display_overflow_test.dart        （IC-17：主界面全档无溢出参数化护栏（含 M 411 / S 320））
 ```
 **子交付与 `[D]`**：
 - T01.1 UX-01：16 处改 `listen:true`；静态断言 `listen:false.l10n` 命中 0；`en↔zh-CN` 往返 3 次逐屏刷新（主界面/设置页每行/历史/常量/变量/键盘语义）。
 - T01.2 UX-02：`supportedLocales` = 静态交集且 `<216`；选择器首帧项 ≤30、P95 帧 ≤100ms、无 >16ms 单帧；选任意语言无异常。
 - T01.3 UX-03：`isRtl` 消费点 ≥1；`ar-SA→rtl`、`en→ltr`；布局镜像；键盘子树 `ltr` 且数字顺序不变。
+- **T01.4 显示区溢出修复（IC-17，**本批唯一阻塞项**）**：`angle_mode_switch.dart` 改单芯片（`Key('angleModeSwitch')` 保留）；`harness.dart` 增通用护栏 `expectNoLayoutOverflow`；`display_overflow_test.dart` 对 §1.5 **全档**（含 **M(411)/S(320)**）+ 窄带 `{320,360,411,480}` 断言主界面**无 `RenderFlex overflow`**（最坏状态：`M`+`Ans` 同显）。**禁止**以放宽断言/容忍溢出来过闸。
 
 ### T02 — 设计体系与响应式（UX-05 / UX-06 / UX-07）
 **依赖**：T01（`home_screen.dart`/`key_button.dart` 与 T01 有交集，串行避免冲突）
@@ -1255,9 +1318,10 @@ graph LR
 | **O-7（ar 数字本地化）** | `ar-SA` 的阿拉伯-印度数字（`١٢٣`）是否本期要求？ | **本批次不做**；本期 `ar` 只验证**文案 + RTL** | §6.1 C20 断言范围 | **【主理人已定】裁定不做**（IC-15；避免触碰 A1 引 Rust 改动） |
 | **O-8（P2）** | UX-12 双窗格 / UX-13 主题图标 / UX-14 Material You | **本期不做**（v3 §7）；图标 `monochrome` 层本次已铺好（低增量） | 后续批次 | **【按 PRD 默认】不做** |
 | **O-9（覆盖率口径 / 三域翻译）** | 完成度只数 `ui.*`（106）是否合理？三域（`errors`/`units`/`constants`）空 `{}` 是否本期补？ | **口径修正为四域全量（228 叶）**；三域**必须在 20 门显式落盘**；新增 §4.2.1 键骨架校验（`en` 三域键 == 引擎列表，源扫描） | UX-09 / UX-10 验收 | **【主理人已定】** 复测确认属"规范缺口"（IC-16），本次必改 |
+| **O-10（显示区角度开关）** | 4 段 `SegmentedButton`（DEG/RAD/GRAD/TURNS）置于结果显示区，M(411)/S(320) 溢出 | **仍在显示区**但降级为**单枚模式芯片**（当前模式常显、点按弹 4 选 1）；移除 4 段控件；加通用溢出护栏 | UX-05 / UX-06 / PRD §4.1 ③ 落点 | **【主理人已定】采纳架构裁决（归 T01）**（IC-17；§1.7） |
 
-> **Anything UNCLEAR 汇总**：本设计对 v3 全部 P0/P1 需求均有明确落点。**用户已定** Q1/Q2/Q3 三项已全部回填正文（§1 / §3.2.3）与 IC 表（IC-13/IC-14）；**主理人已定** O-4/O-7/**O-9** 已登记 IC-5 / IC-15 / **IC-16**；**主理人暂定** O-5/O-6 **不阻塞开工**。
-> **P2 补漏回填**：覆盖率四域口径（§3.4）、三域键骨架与校验（§4.1.1 / §4.2.1）、T04 三域交付（§7 T04.3）**均已完成**；`maxContentWidth` 取值收敛说明见 §3.2.3（**保留 600**）。
+> **Anything UNCLEAR 汇总**：本设计对 v3 全部 P0/P1 需求均有明确落点。**用户已定** Q1/Q2/Q3 三项已全部回填正文（§1 / §3.2.3）与 IC 表（IC-13/IC-14）；**主理人已定** O-4/O-7/O-9/**O-10** 已登记 IC-5 / IC-15 / IC-16 / **IC-17**；**主理人暂定** O-5/O-6 **不阻塞开工**。
+> **补漏回填**：覆盖率四域口径（§3.4）、三域键骨架与校验（§4.1.1 / §4.2.1）、T04 三域交付（§7 T04.3）**均已完成**；`maxContentWidth` 取值收敛说明见 §3.2.3（**保留 600**）；**显示区窄屏溢出修复与通用护栏见 §1.7（归 T01，IC-17）**。
 
 ---
 
