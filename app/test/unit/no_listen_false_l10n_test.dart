@@ -7,6 +7,10 @@
 /// 合法例外：`listen: false` 仅用于**触发 action**（如 `locale.setLocale(...)` /
 /// 取 `locale.manualTag` 传给 `region.setRegion`），**不解引用 `.l10n`** → 不匹配本规则。
 ///
+/// 匹配方式：对**整份文件内容**做多行正则（`\s` 含换行），故跨行的
+/// `Provider.of<LocaleController>(\n context,\n listen: false,\n).l10n` 同样会被捕获，
+/// 严格强于"逐行 grep"语义。
+///
 /// 铁律：本测试用 `dart:io` 扫描源码，须在 `app/` 包根目录运行（`flutter test` 的 cwd）。
 library;
 
@@ -16,10 +20,11 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('lib/ 下不存在"展示文案处 listen:false 读 l10n"（UX-01）', () {
-    // 允许 `context` 与 `listen : false` 之间有空白；`>` 与 `.` 之间允许换行/空白。
+    // 允许 `context` / `listen : false` 间任意空白（含换行）；`)` 与 `.l10n` 间仅允许空白。
     final RegExp defect = RegExp(
       r'Provider\s*\.\s*of\s*<\s*LocaleController\s*>\s*\(\s*context\s*,'
       r'\s*listen\s*:\s*false\s*\)\s*\.\s*l10n',
+      multiLine: true,
     );
 
     final Directory libDir = Directory('lib');
@@ -36,11 +41,10 @@ void main() {
         continue;
       }
       scanned++;
-      final List<String> lines = entity.readAsLinesSync();
-      for (int i = 0; i < lines.length; i++) {
-        if (defect.hasMatch(lines[i])) {
-          offenders.add('${entity.path}:${i + 1}: ${lines[i].trim()}');
-        }
+      final String content = entity.readAsStringSync();
+      for (final RegExpMatch m in defect.allMatches(content)) {
+        final int line = '\n'.allMatches(content.substring(0, m.start)).length + 1;
+        offenders.add('${entity.path}:$line: ${m.group(0)!.replaceAll(RegExp(r"\s+"), " ")}');
       }
     }
 
