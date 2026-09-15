@@ -40,6 +40,7 @@
 | 应用图标 | 规范 | `app/android/app/src/main/res/**` | UX-08 |
 | 译文完成度 | 规范 + 实现 | 新建 `l10n/language_coverage.dart`、`ui/screens/language_picker_screen.dart` | UX-09 |
 | 语言补齐 20 门 | 实现 | `app/assets/i18n/**`（+17 JSON） | UX-10 |
+| **三域翻译 + 覆盖率口径**（本次 P2 补漏） | **规范 + 实现（+补全 3 域叶子）** | 改 `app/assets/i18n/*.json`（**补 `errors`/`units`/`constants` 三域**）、新建 `app/test/support/engine_key_skeleton.dart`、改 `l10n/language_coverage.dart` | UX-09 / UX-10 |
 
 ### 0.4 与既有裁决的一致性声明
 
@@ -781,6 +782,14 @@ class PickedTag extends LanguagePickResult { final String tag; } // 选中某语
 | 平板/大屏 | `medium`/`expanded` 断点（§4.3）下：主内容以 `Center + ConstrainedBox(maxWidth: Breakpoints.maxContentWidth)` **居中约束**，列表在宽屏用 **双列网格**（`SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 360)`）分担横向空间 | 这是**用户选全屏而非弹层的直接收益点**：弹层在平板必然是窄条，全屏页可双列、可居中；与 **UX-12**（≥840dp 双窗格）方向一致——语言页在 `expanded` 下即为"双列"形态的第二窗格雏形 |
 | RTL 兼容 | 页面根 `Directionality(textDirection: l10n.isRtl ? rtl : ltr)`；内边距一律 `EdgeInsetsDirectional`/`start-end`（D-5） | 服务 UX-03 |
 
+**⚠️ 实现收敛（复核对齐，**非设计变更**）：`maxContentWidth` 恒取 `Breakpoints.maxContentWidth = 600`**
+
+> **背景**：实现方当前在 `language_picker_screen.dart` 用了 `ConstrainedBox(maxWidth: 720)` + 双列阈值 `constraints.maxWidth >= 600` + `maxCrossAxisExtent: 420`。以下为**复核结论**（Team-Lead 指定核对项）：
+> 1. **`maxContentWidth` 保留 600，不采纳 720。** 项目内"最大内容宽度"必须**单一取值**（§2.4 `style_guard` 的精神：禁止裸值/重复语义常量）；T02 已断言"XL 档存在 `ConstrainedBox(maxWidth: 600)`"。若选择器用 720，会出现**两个**"最大内容宽度"（600 与 720），复核必判**不一致**。故实现须把 `720` 改为引用 `Breakpoints.maxContentWidth`。
+> 2. **双列阈值 = `Breakpoints.maxContentWidth`（600）**，不得再引入第二个魔法数；即"设备宽度 ≥ 600dp → 双列，否则单列"。
+> 3. **列宽 360 vs 420：在内容被钉死 ≤600 的前提下，两者都恰好排成 2 列**（`ceil(600/360)=2`、`ceil(600/420)=2`），**取值不产生差异**。为可断言起见，宽屏**建议直接用 `SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2)`**（确定性、`[D]` 可断言列数 == 2），免去 `maxCrossAxisExtent` 的换算解释。
+> 4. **结论：设计取值 600 不变**（不是把 600 改成 720，也不是把 720 改成另一个数——而是**合并到既定的 600**）；`frame` 侧只需把 720/420 换成 `Breakpoints.maxContentWidth` + 固定 2 列。**无返工，无设计变更**。
+
 **必须保留的能力（验收口径不变）**：
 1. **可搜索**：`AppBar.bottom` 的 `TextField`（`onChanged` → 过滤 `options`，匹配 `native`/`english`/`tag`，大小写不敏感、子串匹配）；过滤结果**实时**反映到 `itemCount`。
 2. **懒加载**：列表用 `ListView.builder`（或 `GridView.builder` 宽屏双列），`itemCount = filtered.length`；**禁止**任何"先把 216 项 `map` 成 Widget 列表"的写法。保证 `cacheExtent` 内构建项 ≤ 30。
@@ -834,13 +843,23 @@ ListTile(
 
 ### 3.4 UX-09 译文完成度计算
 
+> **⚠️ 口径修正（P2 补漏，登记 §6 IC-16）**：旧口径 `|presentLeaves| / |leaves(en)|` **只在 `ui.*` 域有意义**——因为 `en`/`zh-CN`/`zh-TW` 三个基础包当前**只填了 `ui.*`（106 叶），`errors`/`units`/`constants` 三域均为空 `{}`**。后果：① 三域**零翻译**被掩盖——20 门语言只要补齐 106 个 `ui.*` 就算"100%"，而 `constantName`/`unitName`/`errorText` 在 `en`/`ja`/… 下**全部回落到引擎中文**（正是用户投诉的"没适配"）；② `zh` 之所以"看起来对"，纯粹是**引擎回落恰好是中文**的巧合。**修正口径见下（覆盖全部四域）**。
+
 新建 `app/lib/src/l10n/language_coverage.dart`：
 
 ```dart
 /// 译文完成度服务：对 216 档逐档计算 key 覆盖率（UX-09 / LG-04）。
 ///
-/// 计算口径：`completionPct = |presentLeaves(该语言包)| / |leaves(en)| * 100`，
-/// 其中"present"指叶子 key 存在且值非空；无语言包文件的档 = 0%。
+/// **口径（修正后，四域全量）**：
+///   KEY_UNIVERSE = leaves(en) 的**全部叶子**（`ui` + `errors` + `units` + `constants`）
+///   completionPct(tag) = |{ k ∈ KEY_UNIVERSE : value(tag,k) 存在且非空 }| / |KEY_UNIVERSE| * 100
+///
+/// 三条边界规则（防"分母漏域"再次造成失明）：
+///  1. **分母 = en 的完整叶子集（四域）**，不再只数 `ui.*`；en 缺某域的 key ⇒ 该 key **不属于**全集
+///     （既不计分子也不计分母）——但**由 §4.2.1「键骨架校验」单独判红**，所以"en 缺域"不会被静默吞掉。
+///  2. "present" = 精确包中该叶子**存在且非空**；无语言包文件的档 = 0%。
+///  3. `zh-CN` 可复用引擎中文文案，但必须**显式落盘**（不依赖回落）——否则覆盖率会把它算成"缺失"，
+///     且口径不统一（见 §4.1「为什么三域也必须显式落盘」）。
 abstract final class LanguageCoverage {
   /// 已人工校订的语言（与 §4.3 的 20 门对齐；其余为"未校订"）。
   static const Set<String> humanReviewedTags = <String>{
@@ -864,6 +883,7 @@ abstract final class LanguageCoverage {
 **与 216 档清单的关系**：完成度是挂在**每个 `AppLocale`** 上的**装饰数据**（被转为 §3.2.3 的 `LanguageOption`），清单本身（`LocaleRegistry.supported`，216 条）**不增不减**。**缓存策略**：设置页首次打开时 `await computeAll()`（最多读 20 个 JSON，`AppLocalizations._cache` 已有二级缓存），此后同步取。
 
 **`[D]` 断言**：对 20 门校对语言断言 `pctOf(tag) ≥ 99`；对无包语言断言 `pctOf(tag) == 0` 且 `humanReviewed == false`；设置页断言"未校订"标记出现。
+**新增（口径回归）**：断言 `KEY_UNIVERSE` **四域齐备**（`errors`/`units`/`constants` 各自非空，且 `|KEY_UNIVERSE| == |leaves(en)|`）；并断言"**只填 `ui.*` 的语言包 pct < 60**"（三域 122 叶约占全集 53%，漏域即无法过 99% 闸）——此断言**直接钉死旧口径漏洞**。
 
 ---
 
@@ -876,7 +896,35 @@ abstract final class LanguageCoverage {
   - `locale_registry.dart` 的 **216 条清单保持不动**（LG-03）；
   - 新增的 17 个语言包文件，其 tag 必须能在 `LocaleRegistry.find(tag) != null`（`[D]` 断言：每个包 tag ∈ 216 清单）；
   - `canonicalize` 已保证"选 `ja-JP` 也能命中 `ja.json`"（语言级回落）。
-- **每个 JSON 结构**：与 `en.json` **完全同构**（三层嵌套 `ui/errors/units/constants`），叶子 key 集合一致。
+- **每个 JSON 结构**：与 `en.json` **完全同构**（**四域顶层**：`ui` / `errors` / `units` / `constants`），叶子 key 集合一致。
+  > **现状纠偏**：旧基线里 `errors`/`units`/`constants` 三域均为**空对象 `{}`**（106 叶全部在 `ui.*`）。**本次必须把三域补齐到全部 20 门**（见 §4.1.1）。
+- **为什么三域也必须"显式落盘"（不能只靠回落）**：`AppLocalizations` 三层兜底为 `精确包 → en → 调用方原文`；而 `constantName/unitName/errorText` 的"调用方原文"= **引擎给的中文**。故：
+  - 对 `en`/`ja`/… 任何**非中文**界面，三域回落 = 显示**中文**（正是用户投诉的"没适配"）；
+  - 对 `zh-CN`，回落恰为中文 → "看起来没错"，但**未落盘**既会被覆盖率判为缺失，也无法润色、无法与 `zh-TW` 繁体区分。
+  **结论：三域文本一律显式写进各语言包**；`zh-CN` 可复用引擎中文串，但**必须落盘**。
+
+#### 4.1.1 `en` 三域键骨架：来源 = **引擎公开列表**（非手列）
+
+**原则**：`en.json` 的 `errors`/`units`/`constants` 三域**键名不得手写**，必须由引擎的公开枚举**派生**；`en` 提供**英文文本**作为全 20 门的翻译源（也是第三层兜底的"英文化"来源）。
+
+**枚举来源（三个源文件，均为引擎既有 `pub` 接口，零改动）**：
+
+| 域 | 键前缀 | 枚举来源（`engine/core/src/`） | 公开列表 | 键的取值 |
+|---|---|---|---|---|
+| `constants` | `constants.<symbol>` | `constants.rs`：`pub static CONSTANTS: &[ConstantDef]` / `pub fn all()`；取 `ConstantDef.symbol` | **17 项** | `π` `e` `φ` `τ` `c` `h` `ħ` `G` `N_A` `R` `e_c` `ε₀` `m_e` `m_p` `g` `k_B` `atm` |
+| `errors` | `errors.<stable_name>` | `error.rs`：`ErrorKind::stable_name()`（`match` 的 snake_case 分支） | **20 项** | `unexpected_character` … `internal_error`（1000~5002 共 20 码） |
+| `units` | `units.<id>` | `units.rs`：`UnitCategory::all()`（10 类）× `UnitDef.id` | **85 项** | 10 类合计 85 个单位 id（`nm` `m` `inch` … `kib` `btu`） |
+| `unit_categories`（**建议新增**） | `unit_categories.<id>` | `units.rs`：`UnitCategory::id()` | **10 项** | `length` `mass` `temperature` `time` `area` `volume` `data_storage` `speed` `pressure` `energy` |
+
+> **`unit_categories` 为什么建议一并补**：`unit_converter_screen.dart` 的类别页签现渲染 `Tab(text: c.name)`（**引擎中文**，见该文件 `_categories.map((c) => Tab(text: c.name))`），是**同一类"静默回落"漏点**；三域修一次，顺手把类别名也纳入（增量仅 10 键）。
+
+**键的命名规则（与现有 `tr()` 拼接**逐字**一致，无需改 Dart 访问器）**：
+- `constantName(symbol, engineName)` → `tr('constants.$symbol')`；
+- `unitName(id, engineName)` → `tr('units.$id')`；
+- `errorText(kind, engineMessage)` → `tr('errors.$kind')`（`kind` = `ErrorKind::stable_name()`）。
+三处**均已存在**（`app_localizations.dart`），本次**不改签名**，只把三域内容填进 JSON。类别名若纳入，新增 `unitCategoryName(id, engineName) → tr('unit_categories.$id')`。
+
+**规模估算**：三域新增 `17 + 20 + 85 = 122` 叶（含类别名 `132` 叶）；`en` 全集 `106 + 122 = 228` 叶（含类别名 `238`）。**三域占全集约 53%**——这正是旧口径"失明"的量级。
 
 ### 4.2 覆盖率 / key 集合 / 占位符的自动化校验（`[D]`）
 
@@ -932,7 +980,38 @@ void main() {
 2. **`flatten` 只收叶子**并断言**叶子总数 == en 的叶子数**（防止翻译时把某个中间节点误写成字符串、导致整棵子树丢失）；
 3. **新增 key 必须同时补全 20 门**：CI 无法阻止"开发者在 en 加 key 但忘了补"，但上面的"key 集合相等"会在**下一次 CI** 立刻对 19 门报红 → 强制同步。
 
-> **现状基线（已实测）**：`en/zh-CN/zh-TW` 各 **106 个叶子 key**（120 含中间节点），三者 key 集合完全一致（缺失 0 / 多余 0）。20 门的唯一"真源"是 `en.json` 的 106 个叶子。
+> **现状基线（已实测）**：`en/zh-CN/zh-TW` 各 **106 个叶子 key**（120 含中间节点），三者 key 集合完全一致（缺失 0 / 多余 0）——**但 106 叶全部落在 `ui.*`；`errors`/`units`/`constants` 三域均为空 `{}`**（见 §4.1.1 规模表）。
+> **本次目标基线**：每门 **228 叶**（`106 ui + 122 三域`，含类别名 `238`）。20 门的**唯一"真源"** = `en.json` 的**全量 228 叶**。参数化测试的 `key 集合 == en` / `覆盖率 ≥99%` 在**新基线**下继续成立（分母自动变为 228）。
+
+**三重保险之上再加一道「键骨架校验」（回应 P2 口径漏洞）**：上面的"key 集合 == en"只能保证**各语言跟着 en 走**，**无法发现"en 本身缺域"**（若 `en.json` 的 `constants` 域漏了 3 个符号，则 20 门一起漏，key 集合仍"相等"→ 全绿）。故**必须**把 `en` 的三域键与**引擎实际列表**对齐。
+
+#### 4.2.1 键骨架校验测试（`en` 三域键 == 引擎实际列表）
+
+新建 `app/test/support/engine_key_skeleton.dart`（**测试支撑，非生产代码**）：
+- **能力**：用 `dart:io` **读取引擎源文件**（`../engine/core/src/{constants,units,error}.rs`）→ 正则提取 → 得到引擎**当前**的三域键集。**不调用 FFI、不改 Rust、不依赖原生库**（与既有 `icon_asset_test.dart` 读 `../android/...` 同模式）。
+- **正则（三域，逐字对应 §4.1.1 的枚举来源）**：
+  ```dart
+  // constants.rs → 17 个 symbol
+  RegExp(r'ConstantDef\s*\{[^}]*?symbol:\s*"([^"]+)"', dotAll: true)
+  // units.rs → 85 个 UnitDef.id（+ 10 个 UnitCategory::* => "id"）
+  RegExp(r'UnitDef\s*\{\s*id:\s*"([^"]+)"')
+  // error.rs → 20 个 stable_name（**先截取 `fn stable_name` 到下一个 `fn` 之间的函数体**再匹配，
+  // 以免命中 default_message 的分支；`[a-z]` 首字符天然排除中文默认文案）
+  RegExp(r'=>\s*"([a-z][a-z0-9_]*)"')
+  ```
+- **导出**：`EngineKeySkeleton.constants` / `.errors` / `.units`（`Set<String>`），并在解析失败/数量异常时**直接 `fail`**（避免"正则失配 → 空集 → 误判达标"）。
+
+新建/并入 `app/test/unit/i18n_parity_test.dart` 的**断言形式（核心）**：
+
+| # | 断言 | 形式 | 失败含义 |
+|---|---|---|---|
+| **S1** | `en` 三域键 == 引擎键 | `expect(enDomainKeys('constants'), EngineKeySkeleton.constants, reason: 'en.constants 与引擎 CONSTANTS 不一致(缺/多)')`（`errors`/`units` 同理） | en 漏翻/多翻某个常量·单位·错误码 |
+| **S2** | 各门三域键 == 引擎键（参数化） | 对 20 门循环同 S1 | 某语言漏某域条目 |
+| **S3** | 三域规模钉死 | `expect(EngineKeySkeleton.constants.length, 17); … .errors.length, 20); … .units.length, 85)` | 引擎新增常量/单位/错误码 → **强制**同步骨架 + 20 门翻译 |
+| **S4** | 全域名非空（防"分母漏域"） | `expect(en['errors'], isNotEmpty); en['units']…; en['constants']…` | en 某域退回 `{}`（旧 bug 复现即红） |
+
+> **为什么 S1~S3 是"引擎实际列表"而非手列**：期望值**在测试运行时从引擎源文件派生**；引擎一改（如 `error.rs` 新增 `ErrorKind`），S3 立刻红 → 逼"骨架 + 20 门"同步。这比"维护一份手写 key 清单"更抗漂移，且**零 Rust 改动、零新增依赖、CI 可判**。
+> **备选（更高保真，可选）**：在**原生/集成测试道**（dylib 可用时）用既有 `dispatch` 桥拉 `constants.list`/`units.categories`/错误码表，断言 `== EngineKeySkeleton.*`；dylib 缺失时**显式 skip 并注明 reason**（绝不静默绿）。**主选仍是 S1~S3 的源文件扫描**（无原生依赖，纯 CI 可跑）。
 
 ### 4.3 分批交付（Q7）
 
@@ -942,6 +1021,7 @@ void main() {
 | **批2** | `pt-PT`,`it`,`nl`,`pl`,`tr`,`uk`,`vi`,`ar`,`cs`,`fi` | 10 | 批1 流水线通过 | 复用同一参数化测试，零框架改动 |
 
 > **`ko` 必含**（原版缺失，作为"更完整"证据，v3 UX-10.5）。`ar` 承载 RTL 主验收样本（v3 §6.1 C20，与 UX-03 一并断言）。
+> **工作量口径（含三域，见 §4.1.1）**：每门目标 **228 叶**（原仅 `ui.*` 106 叶）。三域给每门新增 122 叶 → 20 门合计 **+2440 叶**，相对仅 `ui` 的 2120 叶，翻译量 ≈ **×2.15**。其中 **`en` 必须全英文、`zh-CN` 简体（可复用引擎中文但须落盘）、`zh-TW` 繁體**——**即便 P0 三门，三域也必须补齐**（旧基线三门三域皆空）。
 
 ### 4.4 N5 净室约束（语言译文不得复制原版）
 
@@ -1018,6 +1098,7 @@ void main() {
 | **IC-13** | **Q1 用户否掉"横屏一律强制分栏"** | v3 §4.4 原方案（本设计 v3.0 初版）＝ 横屏恒分栏、无开关 | **按用户裁决**：**横屏 short（h<480）强制分栏**；**横屏 tall（h≥480）提供「分栏/堆叠」切换**（持久化 `settings.landscape_layout`，默认 `split`） | `breakpoints.dart`、`home_screen.dart`、`settings_store.dart`、`settings_controller.dart` | v3 §4.4 的"一律强制"被取代；§1.1/§1.2/§1.3/§1.5/§1.6 已按**两形态**重写；**堆叠形态须在 h≥480 无溢出**（否则该档回退强制分栏） |
 | **IC-14** | **Q3 用户否掉"底部弹层"（用户裁决优先于 PM 推荐值）** | v3 UX-02 的 Q3（PRD §9 原列为需用户拍板的开放项；其 **PM 推荐值** = 可搜索底部弹层） | **按用户裁决**：**独立全屏路由页面** `ui/screens/language_picker_screen.dart`（`Navigator.push(MaterialPageRoute)`，同 `unit_converter_screen.dart` 模式） | `ui/screens/language_picker_screen.dart`、`settings_screen.dart` | **不得回退到 PM 推荐值**；搜索/懒加载/首帧≤30/P95≤100ms/完成度/RTL/"216 不缩减" 全部保留；平板用**双列 + `maxContentWidth` 居中**（§3.2.3） |
 | **IC-15** | **`ar` 数字本地化（`٠١٢٣`）是否在本期范围** | v3 §6.1 C20 期望含阿拉伯数字显示 | **裁定：本批次不做**（主理人确认） | —（仅边界声明，见 §7） | ① 阿语区计算器广泛接受西文数字；② 若做需在数字渲染链路引入本地化数字映射 → 触碰 A1"数字格式化归 Rust"，将引 Rust 改动，违背"纯 Dart/UI + 资源层"目标。本期 `ar` 仅验证**文案 + RTL**；列为后续可选增强 |
+| **IC-16** | **覆盖率口径"失明"：旧 `completionPct` 只数 `ui.*`（106），忽略 `errors`/`units`/`constants` 三域（空 `{}`）** | 本设计 v3.0 初版 §3.4/§4.2：`completionPct` 的**分母**仅有 `ui.*` 106 叶（`en`/`zh-CN`/`zh-TW` 三域均为空 `{}`） | **口径修正**：`KEY_UNIVERSE = leaves(en)` 的**四域全量**（228 叶）；新增 §4.2.1「键骨架校验」（`en` 三域键 == 引擎实际列表，源文件扫描）；三域文本**必须显式落盘**（含 `zh-CN`）；三域翻译并入 **T04** | `l10n/language_coverage.dart`、`app/assets/i18n/*.json`、`app/test/support/engine_key_skeleton.dart`、`app/test/unit/i18n_parity_test.dart`、`ui/screens/unit_converter_screen.dart`(类别名) | **属"规范层"缺口**（用户投诉"没适配"的真因之一）：旧口径下 **20 门语言三域零翻译仍全绿**，且 `en`/`ja`/… 界面的常量/单位/错误码**一律回落引擎中文**。修正后：漏三域 → 覆盖率上限 ≈47% → 必红；`en` 缺域由 S1/S4 单独判红。**引擎零改动**（文本只在 Dart 侧 JSON，`tr()` 拼接方式不变） |
 
 ---
 
@@ -1097,24 +1178,32 @@ void main() {
 - T03.1 UX-04：`HapticFeedback` 在 tap 路径触发一次；设置页"交互"分组有开关；关闭后零调用；状态随 P1-11 清单持久化（重启保持）。
 - T03.2 UX-08：自适应图标含 `background/foreground/monochrome`；主体 ⊆ 72dp 安全区；矢量方案（minSdk 26）声明；换符号脚本可用。
 
-### T04 — 语言补齐到 20 门 + 完成度可见性（UX-09 / UX-10）
+### T04 — 语言补齐到 20 门 + 三域翻译 + 完成度可见性（UX-09 / UX-10）
 **依赖**：T01（完成度服务与选择器在 T01 落地）
 **涉及文件**
 ```
-新 app/assets/i18n/{ja,ko,de,fr,es,pt-BR,ru}.json            （批1·7 门）
-新 app/assets/i18n/{pt-PT,it,nl,pl,tr,uk,vi,ar,cs,fi}.json   （批2·10 门）
-新 app/lib/src/l10n/language_coverage.dart                   （完成度计算 + 缓存 + humanReviewedTags）
+改 app/assets/i18n/en.json                                   （补 errors/units/constants 三域·英文；键=引擎列表）
+改 app/assets/i18n/zh-CN.json                                （补三域·简体；可复用引擎中文，须落盘）
+改 app/assets/i18n/zh-TW.json                                （补三域·繁體）
+新 app/assets/i18n/{ja,ko,de,fr,es,pt-BR,ru}.json            （批1·7 门，含三域）
+新 app/assets/i18n/{pt-PT,it,nl,pl,tr,uk,vi,ar,cs,fi}.json   （批2·10 门，含三域）
+新 app/lib/src/l10n/language_coverage.dart                   （四域覆盖率 + 缓存 + humanReviewedTags）
+改 app/lib/src/l10n/app_localizations.dart                   （可选：新增 unitCategoryName(id,name)）
 改 app/lib/src/ui/screens/language_picker_screen.dart        （完成度 % + "未校订"标记）
-改 app/lib/src/l10n/app_localizations.dart                   （可选：暴露叶子 key 计数辅助）
+改 app/lib/src/ui/screens/unit_converter_screen.dart         （类别页签 c.name → l10n.unitCategoryName）
 改 app/lib/src/ui/screens/settings_screen.dart               （未校订可见性）
+新 app/test/support/engine_key_skeleton.dart                 （读 engine/*.rs 派生三域键集·§4.2.1）
+新 app/test/unit/i18n_parity_test.dart                       （20 门覆盖率/key/占位符 + S1~S4 键骨架校验）
+新 app/test/unit/language_20_test.dart                       （20 门门数 + pct 断言 + "漏三域<60%"回归）
 新 docs/i18n/SOURCE.md                                       （N5 译文来源与抽检记录）
-新 app/test/unit/i18n_parity_test.dart                       （20 门覆盖率/key/占位符参数化）
-新 app/test/unit/language_20_test.dart                       （20 门门数 + pct 断言）
-新 app/test/widget/locale_refresh_test.dart（扩展）          （en→ja 断言，承接 T01）
+改 app/test/widget/locale_refresh_test.dart（扩展）          （en→ja 断言，承接 T01）
 ```
 **子交付与 `[D]`**：
-- T04.1 UX-10：20 门文件齐备；每门 key 集合 == en（双向）；覆盖率 ≥99%；占位符一致；含 `ko`；`ar` 与 RTL 一并断言。
-- T04.2 UX-09：216 档逐档完成度%（无包 = 0%）；"未校订"标记；回落显式可见（承接 LC-08）。
+- T04.1 UX-10：20 门文件齐备；**每门含四域**；每门 key 集合 == `en`（双向）；覆盖率 ≥99%；占位符一致；含 `ko`；`ar` 与 RTL 一并断言。
+- T04.2 UX-09：216 档逐档完成度%（分母=**四域全量 228 叶**；无包 = 0%）；"未校订"标记；回落显式可见（承接 LC-08）。
+- **T04.3 三域翻译（本次新增，IC-16）**：`en` 三域键 **== 引擎实际列表**（S1/S3）；20 门三域键 == 引擎列表（S2）；`en` 三域**非空**（S4）；`zh-CN`/`zh-TW` 三域**显式落盘**；常量/单位/错误码在 `en`/`ja` 界面**不再回落中文**（断言 `l10n.constantName('c', '光速') != '光速'`、`errorText('division_by_zero', '除数不能为零') != '除数不能为零'`）；**"只填 ui.* 的包 pct < 60"** 作为旧口径回归。
+> **工作量提示（见 §4.1.1）**：T04 翻译量因三域 ≈ **×2.15**（每门 106→228 叶）；`en`/`zh-CN`/`zh-TW` 三门须在批1前**先补三域**，否则批2 的"覆盖率 ≥99%"闸无法建立。
+
 
 ### 7.1 任务依赖图
 
@@ -1165,8 +1254,10 @@ graph LR
 | **O-6（高对比配色）** | `highContrast` 的 15 个具体 token 取值 | 由 T02 按 §5.4 ≥7:1 自定（IC-8 覆盖表） | TH-05 / UX-06 | **【主理人暂定 · 按推荐值】**（实现时定） |
 | **O-7（ar 数字本地化）** | `ar-SA` 的阿拉伯-印度数字（`١٢٣`）是否本期要求？ | **本批次不做**；本期 `ar` 只验证**文案 + RTL** | §6.1 C20 断言范围 | **【主理人已定】裁定不做**（IC-15；避免触碰 A1 引 Rust 改动） |
 | **O-8（P2）** | UX-12 双窗格 / UX-13 主题图标 / UX-14 Material You | **本期不做**（v3 §7）；图标 `monochrome` 层本次已铺好（低增量） | 后续批次 | **【按 PRD 默认】不做** |
+| **O-9（覆盖率口径 / 三域翻译）** | 完成度只数 `ui.*`（106）是否合理？三域（`errors`/`units`/`constants`）空 `{}` 是否本期补？ | **口径修正为四域全量（228 叶）**；三域**必须在 20 门显式落盘**；新增 §4.2.1 键骨架校验（`en` 三域键 == 引擎列表，源扫描） | UX-09 / UX-10 验收 | **【主理人已定】** 复测确认属"规范缺口"（IC-16），本次必改 |
 
-> **Anything UNCLEAR 汇总**：本设计对 v3 全部 P0/P1 需求均有明确落点。**用户已定** Q1/Q2/Q3 三项已全部回填正文（§1 / §3.2.3）与 IC 表（IC-13/IC-14）；**主理人已定** O-4/O-7 已登记 IC-5 / IC-15；**主理人暂定** O-5/O-6 **不阻塞开工**。
+> **Anything UNCLEAR 汇总**：本设计对 v3 全部 P0/P1 需求均有明确落点。**用户已定** Q1/Q2/Q3 三项已全部回填正文（§1 / §3.2.3）与 IC 表（IC-13/IC-14）；**主理人已定** O-4/O-7/**O-9** 已登记 IC-5 / IC-15 / **IC-16**；**主理人暂定** O-5/O-6 **不阻塞开工**。
+> **P2 补漏回填**：覆盖率四域口径（§3.4）、三域键骨架与校验（§4.1.1 / §4.2.1）、T04 三域交付（§7 T04.3）**均已完成**；`maxContentWidth` 取值收敛说明见 §3.2.3（**保留 600**）。
 
 ---
 
@@ -1276,10 +1367,20 @@ classDiagram
   }
   class LanguageCoverage {
     <<abstract final>>
+    +List~String~ domains$   %% [ui,errors,units,constants]
     +Set~String~ humanReviewedTags$
+    +Set~String~ keyUniverse()  %% = leaves(en) 四域全量 228
     +Map~String,int~ computeAll()
     +int pctOf(String)
     +void invalidate()
+  }
+  class EngineKeySkeleton {
+    <<abstract final>>
+    +Set~String~ constants$   %% 17（constants.rs CONSTANTS.symbol）
+    +Set~String~ errors$      %% 20（error.rs stable_name）
+    +Set~String~ units$       %% 85（units.rs UnitDef.id）
+    +Set~String~ unitCategories$ %% 10（UnitCategory.id）
+    +EngineKeySkeleton fromEngineSources()$  %% dart:io 扫 ../engine/*.rs
   }
   class LanguageOption {
     +String tag
@@ -1327,6 +1428,7 @@ classDiagram
   LanguageCoverage ..> LocaleRegistry : 遍历 216 档
   LanguagePickerScreen ..> LanguageOption : 渲染
   LanguageOption ..> LanguageCoverage : completionPct
+  EngineKeySkeleton ..> LanguageCoverage : 校验 en 三域键（测试支撑）
   KeyButton ..> SettingsController : hapticEnabled
   SettingsController ..> SettingsStore : 持久化
   class AppLocale { }
