@@ -76,7 +76,9 @@ String _read(Directory res, String rel) {
 
   grabAll(RegExp(r'M\s*([\d.]+)\s*,\s*([\d.]+)'), 1, 2);
   grabAll(RegExp(r'H\s*([\d.]+)'), 1, 2, only: 0);
-  grabAll(RegExp(r'V\s*([\d.]+)'), 1, 2, only: 1);
+  // ⚠️ `H` / `V` 各只有 1 个捕获组，故 yi 必须传 1（早期传 2 导致
+  //    `RangeError: Value not in range: 2`，CI 实测）。
+  grabAll(RegExp(r'V\s*([\d.]+)'), 1, 1, only: 1);
   grabAll(RegExp(r'A\s*[\d.]+\s*,\s*[\d.]+\s+0\s+0\s+1\s+([\d.]+)\s*,\s*([\d.]+)'), 1, 2);
   return (xs: xs, ys: ys);
 }
