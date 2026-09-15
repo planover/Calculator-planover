@@ -150,9 +150,6 @@ jobs:
         # 置于 aapt 断言之后——该步已装好 build-tools;34.0.0，apksigner 可直接使用。
         # 无密钥环境（HAS_RELEASE_KEYSTORE=false）跳过：此时 APK 本就是 debug 签名。
         if: ${{ env.HAS_RELEASE_KEYSTORE == 'true' }}
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           set -euo pipefail
           APK=apk/app-release.apk
