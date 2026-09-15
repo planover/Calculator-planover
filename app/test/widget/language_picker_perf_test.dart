@@ -84,8 +84,10 @@ void main() {
       reason: '窄屏列表委托不是 SliverChildBuilderDelegate —— 未使用 ListView.builder',
     );
     // 清单不缩减（LG-03）：项数 == 216 档 + 1 个"跟随系统"。
+    // 用 `SliverChildDelegate.estimatedChildCount`（基类公共 getter）而非子类字段，
+    // 避免依赖 `SliverChildBuilderDelegate.childCount` 的可见性。
     expect(
-      (listView.childrenDelegate as SliverChildBuilderDelegate).childCount,
+      listView.childrenDelegate.estimatedChildCount,
       LanguagePickerScreen.registryOptions().length + 1,
       reason: '列表项数应保持 216 + 1（LG-03 不缩减），仅改变懒加载呈现',
     );
