@@ -3,7 +3,8 @@
 /// 2. **方向断言**：`ar-SA` → 根 `Directionality` 为 `rtl`；`en` → `ltr`；
 /// 3. **布局镜像断言**：RTL 下 `AppBar` actions 左右互换（settings 在 history 右侧）；
 /// 4. **键盘不反转断言**：`Keypad` 子树方向为 `ltr`，数字行视觉顺序仍为 `7,8,9`；
-/// 5. **无异常**。
+/// 5. **键盘功能不破**：RTL 下点按数字键仍能写入输入（方向钉死不应影响功能）；
+/// 6. **无异常**。
 ///
 /// 铁律：仅 `FakeEngine`，不 import `dart:ffi`。
 library;
@@ -80,6 +81,12 @@ void main() {
         tester.getCenter(find.byIcon(Icons.history).first).dx;
     expect(xSettings, greaterThan(xHistory),
         reason: 'RTL 下 AppBar actions 未镜像：settings=$xSettings history=$xHistory');
+
+    // 键盘**功能**不因钉死 ltr 而损坏：RTL 下点按数字键 `7` 应写入输入。
+    await tester.tap(_keypadSemantics('7'));
+    await tester.pumpAndSettle();
+    expect(ar.calculator.text, contains('7'),
+        reason: 'RTL 下点按数字键未写入输入（方向钉死不应影响功能）');
 
     expect(tester.takeException(), isNull);
     ar.dispose();
