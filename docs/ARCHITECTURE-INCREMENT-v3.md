@@ -1193,7 +1193,7 @@ void main() {
 - T01.1 UX-01：16 处改 `listen:true`；静态断言 `listen:false.l10n` 命中 0；`en↔zh-CN` 往返 3 次逐屏刷新（主界面/设置页每行/历史/常量/变量/键盘语义）。
 - T01.2 UX-02：`supportedLocales` = 静态交集且 `<216`；选择器首帧项 ≤30、P95 帧 ≤100ms、无 >16ms 单帧；选任意语言无异常。
 - T01.3 UX-03：`isRtl` 消费点 ≥1；`ar-SA→rtl`、`en→ltr`；布局镜像；键盘子树 `ltr` 且数字顺序不变。
-- **T01.4 显示区溢出修复（IC-17，**本批唯一阻塞项**）**：`angle_mode_switch.dart` 改单芯片（`Key('angleModeSwitch')` 保留）；`harness.dart` 增通用护栏 `expectNoLayoutOverflow`；`display_overflow_test.dart` 对 §1.5 **全档**（含 **M(411)/S(320)**）+ 窄带 `{320,360,411,480}` 断言主界面**无 `RenderFlex overflow`**（最坏状态：`M`+`Ans` 同显）。**禁止**以放宽断言/容忍溢出来过闸。
+- **T01.4 显示区溢出修复（IC-17，本批唯一阻塞项）**：`angle_mode_switch.dart` 改单芯片（`Key('angleModeSwitch')` 保留）；`harness.dart` 增通用护栏 `expectNoLayoutOverflow`；`display_overflow_test.dart` 对 §1.5 **全档**（含 **M(411)/S(320)**）+ 窄带 `{320,360,411,480}` 断言主界面**无 `RenderFlex overflow`**（最坏状态：`M`+`Ans` 同显）。**禁止**以放宽断言/容忍溢出来过闸。
 
 ### T02 — 设计体系与响应式（UX-05 / UX-06 / UX-07）
 **依赖**：T01（`home_screen.dart`/`key_button.dart` 与 T01 有交集，串行避免冲突）
