@@ -30,9 +30,11 @@
 library;
 
 import 'dart:convert';
+import 'dart:io' show File;
 
+import 'package:flutter/foundation.dart'
+    show debugPrint, debugPrintSynchronously;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:calculator_planover/src/engine/fake_engine.dart';
@@ -80,23 +82,15 @@ Future<void> _settle(
   }
 }
 
-/// 语言包**原始 Map 缓存**（复用 `AppLocalizations.load` 的「同 tag 只读一次」缓存语义）。
-///
-/// 为什么：`_enrichedLoader` 原先是**裸** `rootBundle.loadString`（绕过
-/// `AppLocalizations._loadBundle` 的 static `_cache` 与 try/catch 兜底）——这是对
-/// 「第二例 10 分钟挂死」的**重点怀疑点**之一（任务 B ③）。这里与
-/// `AppLocalizations._cache` 对齐：**同 tag 只读一次**，其余命中内存，既排除重复裸读，
-/// 又保持可观测语义等价。
+/// 语言包资产目录（`flutter test` 的进程工作目录 = 包根 `app/`，故可直读）。
+const String _assetDir = 'assets/i18n';
+
+/// 语言包**原始 Map 缓存**：同 tag 只解码一次（与 `AppLocalizations._cache` 语义对齐）。
 final Map<String, Map<String, dynamic>> _rawBundleCache =
     <String, Map<String, dynamic>>{};
 
-/// 用真实语言包 + 注入 `constants.π`（使常量面板文案随语言变化，可被断言）。
-Future<Map<String, dynamic>> _loadEnriched(String tag) async {
-  final Map<String, dynamic>? hit = _rawBundleCache[tag];
-  if (hit != null) {
-    return hit;
-  }
-  final String raw = await rootBundle.loadString('assets/i18n/$tag.json');
+/// 给语言包注入 `constants.π`（使常量面板文案随语言变化，可被断言）。
+Map<String, dynamic> _injectPi(String tag, String raw) {
   final Map<String, dynamic> m =
       Map<String, dynamic>.from(jsonDecode(raw) as Map);
   final Map<String, dynamic> constants = Map<String, dynamic>.from(
@@ -104,18 +98,52 @@ Future<Map<String, dynamic>> _loadEnriched(String tag) async {
   );
   constants['π'] = tag.startsWith('zh') ? '圆周率(译)' : 'Pi (translated)';
   m['constants'] = constants;
-  _rawBundleCache[tag] = m;
   return m;
 }
 
-/// 注入型 loader：真实 UI 文案 + 语言相关的常量名。
-Future<AppLocalizations> _enrichedLoader(String? tag) async {
+/// **同步**解码某语言的语言包（命中缓存则直接返回）—— 任务 B 的根因修复。
+///
+/// 为什么必须同步：`testWidgets` 的测试体运行在 **fake-async 区**；在该区内 `await`
+/// 一个**只能由真实事件循环完成**的 Future（`rootBundle.loadString` 的真实 I/O 分支
+/// 即是）会**永不完成** → 10 分钟 `TimeoutException`。默认 loader
+/// `AppLocalizations.load` 之所以不挂，是因其 static `_cache` 在同 isolate 内**已被
+/// 先前用例预热**，于是**同步命中缓存、根本不走真实 I/O**；而本注入 loader 每次冷读
+/// 资产，必然踩中真实 I/O（CI 实测：卡在 `harness.dart` 的 `await setLocale(...)`，
+/// 且 `pumpWidget` 之前那条标记之后再无任何标记）。
+/// 这里改为**同步读盘**（[File.readAsStringSync]）：**完全不进入事件循环**，从根上
+/// 消除 fake-async 区内的真实 I/O 等待。
+Map<String, dynamic> _loadEnrichedSync(String tag) {
+  final Map<String, dynamic>? hit = _rawBundleCache[tag];
+  if (hit != null) {
+    debugPrint('[ENRICHED] cache hit tag=$tag');
+    return hit;
+  }
+  debugPrint('[ENRICHED] read-sync begin tag=$tag');
+  final Map<String, dynamic> m =
+      _injectPi(tag, File('$_assetDir/$tag.json').readAsStringSync());
+  _rawBundleCache[tag] = m;
+  debugPrint('[ENRICHED] read-sync end tag=$tag');
+  return m;
+}
+
+/// 注入型 loader：真实 UI 文案 + 语言相关的常量名（**全程不触碰真实 I/O**）。
+///
+/// 标记（任务 B ①）：`[ENRICHED] loader begin/end`。若 CI 里 `loader begin` 之后没有
+/// `end`，则卡点在 loader 内部；若 `loader begin` 都没出现，则卡点在
+/// `LocaleController.setLocale` 的 **`saveLocaleTag`**（已核实 `MemorySettingsStore`
+/// 为纯内存、不可能阻塞，故可排除）。
+Future<AppLocalizations> _enrichedLoader(String? tag) {
   final String resolved = LocaleRegistry.canonicalize(tag);
-  final Map<String, dynamic> bundle = await _loadEnriched(resolved);
+  debugPrint('[ENRICHED] loader begin tag=$tag resolved=$resolved');
+  final Map<String, dynamic> bundle = _loadEnrichedSync(resolved);
   final Map<String, dynamic> fallback = resolved == LocaleRegistry.fallbackTag
       ? const <String, dynamic>{}
-      : await _loadEnriched(LocaleRegistry.fallbackTag);
-  return AppLocalizations(resolved, bundle: bundle, fallback: fallback);
+      : _loadEnrichedSync(LocaleRegistry.fallbackTag);
+  debugPrint('[ENRICHED] loader end resolved=$resolved');
+  // 全程无真实 I/O → 返回**已完成**的 Future；在 fake-async 区内 `await` 即刻完成。
+  return Future<AppLocalizations>.value(
+    AppLocalizations(resolved, bundle: bundle, fallback: fallback),
+  );
 }
 
 /// 键盘子树内的语义标签（避免与结果显示区文案撞名）。
@@ -125,6 +153,26 @@ Finder _keypadSemantics(String label) => find.descendant(
     );
 
 void main() {
+  // 任务 B ①：`debugPrint` 默认走 `debugPrintThrottled` —— 它靠**定时器**批量刷新，
+  // 而在 `testWidgets` 的 fake-async 区内、尚未 `pump` 时定时器不会触发，于是挂死前
+  // 最后若干条标记可能被**丢在缓冲区里**，使"最后一条可见标记"并非真正的卡点。
+  // 改为**同步打印**，保证 CI 日志里的标记序列**逐条可靠**（下一轮以同步标记为准）。
+  debugPrint = debugPrintSynchronously;
+
+  // 任务 B ②（选项 (a) 的加固）：在 `setUpAll`（**不在** fake-async 区内）**同步预热**
+  // 语言包缓存，使第二例测试体内**只命中内存、不再触碰任何真实 I/O**。
+  setUpAll(() {
+    for (final String tag in <String>[
+      'en',
+      'zh-CN',
+      LocaleRegistry.fallbackTag,
+    ]) {
+      _loadEnrichedSync(tag);
+    }
+    debugPrint('[ENRICHED] setUpAll prewarm done -> '
+        '${_rawBundleCache.keys.join(",")}');
+  });
+
   testWidgets('en↔zh-CN：主界面/设置页逐行/键盘语义全部刷新，往返 3 次回到初始态',
       (WidgetTester tester) async {
     final AppHarness h =
