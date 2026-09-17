@@ -5,6 +5,7 @@
 /// 铁律：仅依赖 [FakeEngine]，**不 import `dart:ffi` / `native_engine`**。
 library;
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -82,6 +83,49 @@ class AppHarness {
   }
 }
 
+/// 是否打印脚手架内部**进度标记**（`[harness] ...`）。
+///
+/// 仅用于「超时定位」期间把挂死点窄化到某个 `await`；**默认关闭**，避免污染全局
+/// CI 日志。启用方式：在具体用例开头设 `harnessTrace = true;`。
+bool harnessTrace = false;
+
+/// 按需打印脚手架进度标记（见 [harnessTrace]）。
+void _trace(String message) {
+  if (harnessTrace) {
+    debugPrint('[harness] $message');
+  }
+}
+
+/// **有界**的「首次 settle」（T01 超时定位，任务 B）—— 取代无界的 `pumpAndSettle()`。
+///
+/// 为什么必须有界：`pumpAndSettle()` 会一直泵帧直到**帧管线归零**；若任一场景下帧被
+/// 持续排队，它会把整条测试拖到 10 分钟上限（CI 实测
+/// `TimeoutException after 0:10:00.000000`）。这里固定推进至多 [maxFrames] 帧、
+/// 每帧 [step]，**保证终止**；同时足以越过首帧布局 / 入场动效（约 300ms）与
+/// 120ms 输入防抖。
+///
+/// **不掩盖真实缺陷**：若到达帧上限仍未归零，**打印**决定性信号
+/// （`hasScheduledFrame` / `transientCallbackCount`）——那意味着**应用层持续排帧**
+/// （真机＝卡顿/发热），属**必须修源码**的真实问题，**不得**以「改成有界」掩盖。
+/// 权威判定入口见 `locale_frame_pipeline_diagnostic_test.dart`。
+Future<void> _settleBounded(
+  WidgetTester tester, {
+  int maxFrames = 30,
+  Duration step = const Duration(milliseconds: 100),
+}) async {
+  for (int i = 0; i < maxFrames; i++) {
+    await tester.pump(step);
+    if (!tester.binding.hasScheduledFrame) {
+      return;
+    }
+  }
+  debugPrint(
+    '[harness] pumpApp 有界 settle 未在 $maxFrames 帧内归零：'
+    'hasScheduledFrame=${tester.binding.hasScheduledFrame} '
+    'transientCallbackCount=${tester.binding.transientCallbackCount}',
+  );
+}
+
 /// 把被测 Widget 包进可注入尺寸 / 语言 / 主题的宿主，返回可断言的控制器套件。
 ///
 /// - [child] 为 null 时 pump **真实** [MyApp]（含 `MaterialApp.builder` 的字号 clamp
@@ -126,11 +170,17 @@ Future<AppHarness> pumpApp(
         history: historyCtl,
       );
 
+  _trace('pumpApp: begin size=${size.width.toInt()}x${size.height.toInt()} '
+      'localeTag=$localeTag child=${child == null}');
   if (locale == null && localeTag != null) {
+    _trace('pumpApp: setLocale($localeTag) begin');
     await localeCtl.setLocale(localeTag);
+    _trace('pumpApp: setLocale end');
   }
   if (history == null) {
+    _trace('pumpApp: history.load begin');
     await historyCtl.load();
+    _trace('pumpApp: history.load end');
   }
 
   final Widget app;
@@ -159,8 +209,11 @@ Future<AppHarness> pumpApp(
     );
   }
 
+  _trace('pumpApp: pumpWidget begin');
   await tester.pumpWidget(app);
-  await tester.pumpAndSettle();
+  _trace('pumpApp: pumpWidget end');
+  await _settleBounded(tester);
+  _trace('pumpApp: settleBounded end');
 
   return AppHarness(
     settings: settingsCtl,

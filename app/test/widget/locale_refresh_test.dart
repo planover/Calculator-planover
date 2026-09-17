@@ -12,21 +12,20 @@
 /// 铁律：仅 `FakeEngine`，不 import `dart:ffi`。
 ///
 /// ─────────────────────────────────────────────────────────────────────────
-/// 关于**有界泵帧**（`_settle`）而非 `pumpAndSettle()`（T01 修复，见第二例）：
+/// 关于**有界泵帧**（`_settle`）而非无界的 `pumpAndSettle()`（见第二例）：
 /// `pumpAndSettle()` 会一直泵帧直到**帧管线归零**（`binding.hasScheduledFrame`
-/// 为假）。但"**在已打开的 `showModalBottomSheet` 路由上做语言切换**"这一组合
-/// 会让帧管线**始终有下一帧**：UX-01 把三个抽屉从 `listen: false` 改成
-/// `listen: true` 之后，语言切换（`LocaleController.notifyListeners()`）会**重建
-/// 打开中的抽屉路由**（`memory_sheet` / `history_sheet`），而 `MaterialApp.builder`
-/// 这道"全应用唯一窄腰"（`app.dart` 注入 `MediaQuery` + `Directionality`）位于
-/// `Navigator` 之上，语言切换会连同**整个路由栈（含打开中的底部抽屉）**一起重建；
-/// 底部抽屉路由的入场动效 / `DraggableScrollableSheet` 机制随之被**重新激活**，
-/// 于是帧被持续排队，`pumpAndSettle()` 直到其 10 分钟（假时钟）上限都不返回
-/// ——CI 实测为 `TimeoutException after 0:10:00.000000`（见提交说明）。
-/// 对照：第一例（只切语言、**不**开抽屉）与既有 `history_marker_test`
-/// （开抽屉、**不**切语言）都能正常 settle —— 只有"两者同时发生"才挂死。
-/// 故第二例统一改用**确定性的有界泵帧**：固定推进 N 帧，**保证终止**，
-/// 同时足以越过路由 / 页签 / 抽屉过渡（约 300ms）与输入防抖（120ms）。
+/// 为假）；第二例（"在打开的抽屉上切语言"）CI 实测会挂到 10 分钟上限
+/// （`TimeoutException after 0:10:00.000000`）。故本文件统一改用**确定性的有界
+/// 泵帧**：固定推进 N 帧、**保证终止**，且足以越过路由 / 页签 / 抽屉过渡
+/// （约 300ms）与输入防抖（120ms）。
+///
+/// ⚠️ **根因尚未定论（勿误读）**：原假设"语言切换重建打开中的抽屉路由 → 帧管线
+/// 无限排队"已被诊断用例 `locale_frame_pipeline_diagnostic_test.dart` **证伪**
+/// ——4 组对照全部 `hasScheduledFrame=false` / `transientCallbackCount=0`，即
+/// **应用层没有无限排帧**。故"改用有界泵帧"只保证**测试终止**，**不等于**应用不卡；
+/// 真正的挂死点仍由 `[LOCALE-REFRESH-2] step=N` 与 `[harness] ...` 进度标记定位
+/// （第二例开头 `harnessTrace = true` 打开脚手架内部标记）。**严禁**用更短的
+/// test timeout 掩盖挂死——标记只用于**定位**，不改变任何断言强度。
 /// ─────────────────────────────────────────────────────────────────────────
 library;
 
@@ -65,12 +64,12 @@ const List<String> _zhSettings = <String>[
 
 /// **有界泵帧**（确定性、保证终止）—— 取代无界的 `pumpAndSettle()`。
 ///
-/// 为什么必须有界：见文件头注释（语言切换 + 打开中的底部抽屉 → 帧管线不归零
-/// → `pumpAndSettle()` 挂到 10 分钟上限）。这里固定推进 [frames] 帧、
-/// 每帧 [step]（默认 8×120ms = 960ms），足以覆盖：
+/// 为什么必须有界：见文件头注释（第二例 CI 实测挂到 10 分钟上限）。这里固定推进
+/// [frames] 帧、每帧 [step]（默认 8×120ms = 960ms），足以覆盖：
 /// - `MaterialPageRoute` / 页签切换过渡（约 300ms）；
 /// - `showModalBottomSheet` 入场（约 250ms）；
 /// - `Debouncer` 输入防抖（120ms）。
+/// 注：它只保证**测试终止**，**不**代表应用不卡——真正的挂死点用进度标记定位。
 Future<void> _settle(
   WidgetTester tester, {
   int frames = 8,
@@ -81,8 +80,22 @@ Future<void> _settle(
   }
 }
 
+/// 语言包**原始 Map 缓存**（复用 `AppLocalizations.load` 的「同 tag 只读一次」缓存语义）。
+///
+/// 为什么：`_enrichedLoader` 原先是**裸** `rootBundle.loadString`（绕过
+/// `AppLocalizations._loadBundle` 的 static `_cache` 与 try/catch 兜底）——这是对
+/// 「第二例 10 分钟挂死」的**重点怀疑点**之一（任务 B ③）。这里与
+/// `AppLocalizations._cache` 对齐：**同 tag 只读一次**，其余命中内存，既排除重复裸读，
+/// 又保持可观测语义等价。
+final Map<String, Map<String, dynamic>> _rawBundleCache =
+    <String, Map<String, dynamic>>{};
+
 /// 用真实语言包 + 注入 `constants.π`（使常量面板文案随语言变化，可被断言）。
 Future<Map<String, dynamic>> _loadEnriched(String tag) async {
+  final Map<String, dynamic>? hit = _rawBundleCache[tag];
+  if (hit != null) {
+    return hit;
+  }
   final String raw = await rootBundle.loadString('assets/i18n/$tag.json');
   final Map<String, dynamic> m =
       Map<String, dynamic>.from(jsonDecode(raw) as Map);
@@ -91,6 +104,7 @@ Future<Map<String, dynamic>> _loadEnriched(String tag) async {
   );
   constants['π'] = tag.startsWith('zh') ? '圆周率(译)' : 'Pi (translated)';
   m['constants'] = constants;
+  _rawBundleCache[tag] = m;
   return m;
 }
 
@@ -163,59 +177,87 @@ void main() {
   });
 
   testWidgets('常量面板 / 记忆面板 / 历史抽屉 随语言刷新', (WidgetTester tester) async {
+    // ── 超时定位（任务 B ①）──────────────────────────────────────────────
+    // 打开脚手架内部进度标记（`[harness] ...`）+ 本用例自身的 step 标记，把「10 分钟
+    // 挂死点」窄化到某个具体 `await`：**CI 日志里最后一条 `step=N` 即为停住的位置**。
+    // 本用例的每一步 await 都打了标记；配合 `harnessTrace` 可区分"挂在 pumpApp 内"
+    // 还是"挂在本用例体内"。
+    // 严禁用更短 test timeout 掩盖：标记只为**定位**，不改变任何断言强度。
+    harnessTrace = true;
+    debugPrint('[LOCALE-REFRESH-2] step=0 start');
+
     final FakeEngine engine = FakeEngine(
       constants: const <ConstantInfo>[
         ConstantInfo(symbol: 'π', name: 'Pi', value: '3.141592653589793'),
       ],
     );
+    debugPrint('[LOCALE-REFRESH-2] step=1 engine built');
     final AppHarness h = await pumpApp(
       tester,
       size: const Size(411, 2400),
       engine: engine,
       loader: _enrichedLoader,
     );
+    debugPrint('[LOCALE-REFRESH-2] step=2 pumpApp returned');
 
-    // 说明：本用例涉及"在打开的抽屉上切语言"——`pumpAndSettle()` 会挂死
-    // （根因见文件头）。故全程改用有界泵帧 `_settle()`。
+    // 说明：本用例涉及"在打开的抽屉上切语言"，全程使用有界泵帧 `_settle()`
+    // （根因尚未定论，见文件头）；每一步 await 都打了 step 标记用于定位。
 
     // ── 常量面板（constants_panel 缺陷）──
     await tester.tap(find.text('Constants'));
+    debugPrint('[LOCALE-REFRESH-2] step=3 tapped Constants');
     await _settle(tester);
+    debugPrint('[LOCALE-REFRESH-2] step=4 settled after Constants');
     expect(find.text('Pi (translated)'), findsWidgets);
     await h.locale.setLocale('zh-CN');
+    debugPrint('[LOCALE-REFRESH-2] step=5 setLocale zh-CN');
     await _settle(tester);
+    debugPrint('[LOCALE-REFRESH-2] step=6 settled after zh-CN');
     expect(find.text('圆周率(译)'), findsWidgets,
         reason: '常量面板未随语言刷新（listen:false 缺陷）');
     expect(find.text('Pi (translated)'), findsNothing);
     await h.locale.setLocale('en');
     await _settle(tester);
+    debugPrint('[LOCALE-REFRESH-2] step=7 back to en');
 
     // ── 记忆面板（memory_sheet 缺陷）──
     await tester.tap(_keypadSemantics('Memory'));
     await _settle(tester);
+    debugPrint('[LOCALE-REFRESH-2] step=8 memory sheet opened');
     expect(find.text('Memory'), findsWidgets); // 面板标题（en）
     await h.locale.setLocale('zh-CN');
     await _settle(tester);
+    debugPrint('[LOCALE-REFRESH-2] step=9 memory sheet zh-CN');
     expect(find.text('记忆寄存器'), findsWidgets,
         reason: '记忆面板未随语言刷新（listen:false 缺陷）');
     await tester.tap(find.byIcon(Icons.close));
     await _settle(tester);
+    debugPrint('[LOCALE-REFRESH-2] step=10 memory sheet closed');
     await h.locale.setLocale('en');
     await _settle(tester);
+    debugPrint('[LOCALE-REFRESH-2] step=11 back to en');
 
     // ── 历史抽屉（history_sheet 的 _HistoryTile 缺陷）──
     // `setText` 返回 void（不可 await）；`commit` 返回 Future<void>（应 await）。
     h.calculator.setText('1+1');
+    debugPrint('[LOCALE-REFRESH-2] step=12 setText done');
     await h.calculator.commit();
+    debugPrint('[LOCALE-REFRESH-2] step=13 commit done');
     await _settle(tester);
     await tester.tap(find.byIcon(Icons.history).first);
     await _settle(tester);
+    debugPrint('[LOCALE-REFRESH-2] step=14 history sheet opened');
     expect(find.byTooltip('Delete'), findsWidgets);
     await h.locale.setLocale('zh-CN');
+    debugPrint('[LOCALE-REFRESH-2] step=15 setLocale zh-CN');
     await _settle(tester);
+    debugPrint('[LOCALE-REFRESH-2] step=16 settled after zh-CN');
     expect(find.byTooltip('删除'), findsWidgets,
         reason: '历史条目未随语言刷新（listen:false 缺陷）');
 
+    debugPrint('[LOCALE-REFRESH-2] step=17 body done');
+    harnessTrace = false;
     h.dispose();
+    debugPrint('[LOCALE-REFRESH-2] step=18 disposed');
   });
 }
