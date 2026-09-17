@@ -184,3 +184,26 @@ Future<void> forEachDeviceClass(
     await body(tester, device);
   }
 }
+
+/// 通用**布局护栏**（架构 §1.7 Q3，T01.4）—— 断言本帧无 `RenderFlex` 溢出等布局异常。
+///
+/// 为什么用 `takeException`：`RenderFlex overflow` 并不**抛出**，而是经
+/// `FlutterError.reportError` 记录；在 widget 测试里由 `WidgetTester.takeException()`
+/// 取回。故此处以 `expect(takeException(), isNull)` 断言，等价于「本帧无布局异常」。
+///
+/// **调用时机**：必须在 `pump` / `pumpAndSettle` **之后**（溢出在 layout / paint 期报告）。
+///
+/// **长期生效、单一收口**：被所有渲染主界面的用例（`locale_refresh` / `rtl` /
+/// `language_picker_perf` / `display_overflow`）与 T02 `responsive_test` 复用。
+///
+/// ⚠️ 若它揪出**其它**真实溢出（如 `PreviewLine` 超长数字、`Keypad` 窄高键），
+/// 那是**真实**缺陷，护栏把它暴露出来正是**目的** —— **严禁**放宽本断言、
+/// 容忍溢出或跳过档位来「转绿」。
+void expectNoLayoutOverflow(WidgetTester tester, {String? where}) {
+  final Object? ex = tester.takeException();
+  expect(
+    ex,
+    isNull,
+    reason: '${where ?? ""}: 布局异常（RenderFlex overflow 等）→ $ex',
+  );
+}

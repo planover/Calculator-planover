@@ -44,12 +44,19 @@ class DisplayPanel extends StatelessWidget {
               children: <Widget>[
                 // 记忆寄存器 `M` 指示器与 `Ans` 指示器采用不同视觉样式（CP-17）。
                 _AnsIndicator(),
-                Row(
-                  children: <Widget>[
-                    MemoryIndicator(),
-                    SizedBox(width: Tokens.padSm),
-                    AngleModeSwitch(),
-                  ],
+                // 行内约束（架构 §1.7 Q2/Q3）：右侧状态簇（`M` + 角度芯片）整体
+                // 用 [Flexible] 兜底 —— 即便将来再加指示器，也只会在**该簇内部**
+                // 收缩，绝不会把整行撑出 `RenderFlex overflow`（IC-17）。
+                // 现装内容合计 ≈ `44 + 8 + (28 + 8 + 76) = 164px` ≪ 320dp 可用 288px。
+                Flexible(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      MemoryIndicator(),
+                      SizedBox(width: Tokens.padSm),
+                      AngleModeSwitch(),
+                    ],
+                  ),
                 ),
               ],
             ),
